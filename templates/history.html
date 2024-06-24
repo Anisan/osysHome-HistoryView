@@ -1,0 +1,45 @@
+{% extends "layouts/module_admin.html" %}
+
+{% block module %}
+    <h1>History <a href="Objects?view=object&object={{object.id}}&tab=properties">{{object.name}}.{{name}}</a></h1>
+    <h5>Total values: {{total}}</h5>
+    <table class="table">
+        <thead>
+          <tr>
+            <th scope="col">Value</th>
+            <th scope="col">Added</th>
+            <th scope="col">Source</th>
+            <th scope="col"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in data %}
+          <tr>
+            <td>{{item.value}}</td>
+            <td>{{item.added}}</td>
+            <td>{{item.source}}</td>
+            <td>
+              <a href="?op=delete&id={{item.id}}&object={{object.id}}&name={{name}}" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-danger" title="Delete"><i class="feather icon-trash"></i></a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+    </table>
+    <nav aria-label="Page navigation">
+      <ul class="pagination">
+        <li class="page-item"><a class="page-link" href="?page=0&object={{object.id}}&name={{name}}"><<</a></li>
+        {% if page-10 > -1 %}
+        <li class="page-item"><div class="page-link disabled" href="#">...</div></li>
+        {%endif%}
+        {% for i in range(0,pages-1) %}
+        {% if i > page-10 and i < page+10 %}
+        <li class="page-item"><a class="page-link{%if i == page %} active{%endif%}" href="?page={{i}}&object={{object.id}}&name={{name}}">{{i+1}}</a></li>
+        {% endif %}
+        {%endfor%}
+        {% if page < pages-10 %}
+        <li class="page-item"><div class="page-link disabled" href="#">...</div></li>
+        {%endif%}
+        <li class="page-item"><a class="page-link" href="?page={{pages-1}}&object={{object.id}}&name={{name}}">>></a></li>
+      </ul>
+    </nav>
+{% endblock %}
