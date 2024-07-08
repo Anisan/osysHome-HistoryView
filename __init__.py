@@ -1,5 +1,6 @@
 from flask import render_template, redirect
 from app.core.main.BasePlugin import BasePlugin
+from app.database import session_scope
 from app.authentication.handlers import handle_admin_required
 from app.core.models.Clasess import Object,Value, History
 from sqlalchemy import desc
@@ -22,9 +23,10 @@ class HistoryView(BasePlugin):
         page = int(request.args.get("page", 0))
         if op == 'delete':
             id = request.args.get("id",None)
-            self.session.query(History).filter(History.id==id).delete()
-            self.session.commit()
-            return redirect(f'{self.name}?object={object_id}&name={name}&page={page}')
+            with session_scope() as session:
+                session.query(History).filter(History.id==id).delete()
+                session.commit()
+                return redirect(f'{self.name}?object={object_id}&name={name}&page={page}')
 
         per_page = 30
         obj = Object.query.where(Object.id == object_id).one_or_none()
