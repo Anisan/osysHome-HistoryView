@@ -1,45 +1,310 @@
 {% extends "layouts/module_admin.html" %}
 
 {% block module %}
-    <h1>History <a href="Objects?view=object&object={{object.id}}&tab=properties">{{object.name}}.{{name}}</a></h1>
-    <h5>Total values: {{total}}</h5>
-    <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Value</th>
-            <th scope="col">Added</th>
-            <th scope="col">Source</th>
-            <th scope="col"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in data %}
-          <tr>
-            <td>{{item.value}}</td>
-            <td>{{item.added}}</td>
-            <td>{{item.source}}</td>
-            <td>
-              <a href="?op=delete&id={{item.id}}&object={{object.id}}&name={{name}}" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-danger" title="Delete"><i class="feather icon-trash"></i></a>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-    </table>
-    <nav aria-label="Page navigation">
-      <ul class="pagination">
-        <li class="page-item"><a class="page-link" href="?page=0&object={{object.id}}&name={{name}}"><<</a></li>
-        {% if page-10 > -1 %}
-        <li class="page-item"><div class="page-link disabled" href="#">...</div></li>
-        {%endif%}
-        {% for i in range(0,pages-1) %}
-        {% if i > page-10 and i < page+10 %}
-        <li class="page-item"><a class="page-link{%if i == page %} active{%endif%}" href="?page={{i}}&object={{object.id}}&name={{name}}">{{i+1}}</a></li>
-        {% endif %}
-        {%endfor%}
-        {% if page < pages-10 %}
-        <li class="page-item"><div class="page-link disabled" href="#">...</div></li>
-        {%endif%}
-        <li class="page-item"><a class="page-link" href="?page={{pages-1}}&object={{object.id}}&name={{name}}">>></a></li>
-      </ul>
-    </nav>
+  <!-- Vue 2 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+
+  <!-- Highcharts -->
+  <script src="https://code.highcharts.com/highcharts.js"></script>
+  <script src="https://code.highcharts.com/highcharts-3d.js"></script>
+  <script src="https://code.highcharts.com/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/modules/export-data.js"></script>
+  <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+
+  <div id="history_app">
+    <h3>History <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
+    <small>Description: [[info.object_description ?? "No description"]].[[info.description ?? "No description"]]</small>
+    <div class="my-2">
+      Periods: <div class="btn mx-1" :class="period == item.value ? 'btn-primary':'btn-secondary'" v-for="item in periods" @click="period = item.value">[[item.title]]</div>
+      <span v-if="!loading">Count values: [[chartData.length]]</span>
+      <i v-else class="fa-solid fa-spinner fa-spin"></i>
+    </div>
+    <!-- Вкладки -->
+    <ul class="nav nav-tabs" role="tablist">
+      <li v-if="viewCharts" class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#charts">Graph</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" :class="{ active : !viewCharts}" data-bs-toggle="tab" href="#table">Table</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#info">Info</a>
+      </li>
+    </ul>
+    <!-- Содержимое вкладок -->
+    <div class="tab-content">
+      <!-- Вкладка "Графики" -->
+      <div v-if="viewCharts" class="tab-pane active" id="charts" role="tabpanel">
+       <div id="lineChart" style="min-width: 310px; height: 500px; margin: 0 auto;"></div>
+       <div id="pieChart" style="min-width: 310px; height: 400px; margin: 0 auto;"></div>
+      </div>
+
+      <!-- Вкладка "Таблица" -->
+      <div class="tab-pane fad" :class="{ active : !viewCharts}" id="table" role="tabpanel">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Value</th>
+              <th>Changed</th>
+              <th>Source</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(item, index) in paginatedData" :key="item.id">
+              <td>[[ item.value ]]</td>
+              <td>[[ formatDate(item.added) ]]</td>
+              <td>[[ item.added ]]</td>
+              <td>[[ item.source || 'Unknown' ]]</td>
+              <td><a :href="'?op=delete&id='+item.id+'&object={{object.id}}&name={{name}}'" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-sm btn-danger" title="Delete"><i class="feather icon-trash"></i></a></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Пагинация -->
+        <nav aria-label="Page navigation" class="mt-4">
+          <ul class="pagination justify-content-center">
+            <li class="page-item" :class="{ disabled: currentPage === 1 }">
+              <a class="page-link" href="#" @click="prevPage">Prev</a>
+            </li>
+            <li v-for="(page,index) in totalPages" :key="page" class="page-item" :class="{ active: page === currentPage }">
+              <a class="page-link" href="#" @click="goToPage(page)">[[page]]</a>
+            </li>
+            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
+              <a class="page-link" href="#" @click="nextPage">Next</a>
+            </li>
+          </ul>
+        </nav>
+      </div>
+      <div class="tab-pane p-3" id="info" role="tabpanel">
+        Name: <b>[[info.name]]</b><br>
+        Description: <b>[[info.description ?? '-']]</b><br>
+        Type: <b>[[info.type ?? '-']]</b><br>
+        History: <b>[[info.history]]</b><br>
+        Link: <span class="badge bg-success text-light" v-for="item in info.linked">[[item]]</span><br>
+       </div>
+    </div>
+  </div>
+
+  <script>
+    new Vue({
+      el: '#history_app',
+      delimiters: ['[[', ']]'], // Измененные разделители
+      data() {
+        return {
+          loading: true,
+          info:{},
+          object_name: "{{object.name}}",
+          property_name: "{{name}}",
+          chartData: [],
+          sourceCounts: {},
+          step: undefined,
+          currentPage: 1, // Текущая страница пагинации
+          pageSize: 25, // Количество элементов на странице
+          period:1,
+          periods:[
+            {"title":"1 hour", "value": 1},
+            {"title":"3 hour", "value": 3},
+            {"title":"6 hour", "value": 6},
+            {"title":"12 hour", "value": 12},
+            {"title":"Day", "value": 24},
+            {"title":"Week", "value": 168},
+            {"title":"2 week", "value": 336},
+            {"title":"Month", "value": 720},
+            {"title":"3 month", "value": 2160},
+            {"title":"6 month", "value": 4320},
+            {"title":"Year", "value": 8640},
+            {"title":"All", "value": -1},
+          ]
+        };
+      },
+      computed: {
+        // Вычисляемые данные для текущей страницы
+        paginatedData() {
+          const start = (this.currentPage - 1) * this.pageSize;
+          const end = start + this.pageSize;
+          return this.chartData.slice(start, end);
+        },
+        // Общее количество страниц
+        totalPages() {
+          return Math.ceil(this.chartData.length / this.pageSize);
+        },
+        viewCharts(){
+          return this.info.type=='int' || this.info.type=='float' || this.info.type=='bool'
+        }
+      },
+      watch:{
+        period(){
+          this.fetchData()
+        },
+      },
+      methods: {
+        // Формирование временного диапазона для последнего часа
+        getDateTimeRange() {
+          const now = new Date();
+          console.log(now)
+          var hoursAgo = new Date("2000-01-01")
+          if (this.period > 0) 
+            hoursAgo = new Date(now.getTime() - this.period * 60 * 60 * 1000); // Вычитаем период в часах
+
+          const dtBegin = new Date(hoursAgo.getTime() - (hoursAgo.getTimezoneOffset() * 60000)).toISOString().split('.')[0]; // Убираем миллисекунды
+          const dtEnd = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('.')[0]; // Убираем миллисекунды
+
+          return { dtBegin, dtEnd };
+        },
+        // Сортировка данных по дате в обратном порядке
+        sortDataByDateDescending(data) {
+          return data.sort((a, b) => {
+            const dateA = new Date(a.added);
+            const dateB = new Date(b.added);
+            return dateB - dateA; // От поздней к ранней
+          });
+        },
+        fetchInfo(){
+          fetch("/api/property/info/"+this.object_name+"."+this.property_name)
+          .then(response => response.json())
+          .then(data => {
+            console.log(data)
+            if (data.success) {
+              this.info = data.result
+              if (this.info.type == 'int')
+                this.step = 'left'
+              this.fetchData()
+            }
+          })
+          .catch(error => {
+            console.error('Ошибка при запросе к API:', error);
+          });
+        },
+        // Загрузка данных через API
+        fetchData() {
+          this.loading = true
+          const { dtBegin, dtEnd } = this.getDateTimeRange();
+          console.log(dtBegin, dtEnd)
+
+          fetch(`/api/property/history?object={{object.name}}&property={{name}}&dt_begin=${dtBegin}&dt_end=${dtEnd}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              this.chartData = this.sortDataByDateDescending(data.result);
+
+              if (!this.viewCharts)
+                return
+
+              // Подготовка данных для линейного графика
+              const values = data.result.map(item => {
+                // Преобразуем строку даты в объект Date и затем в Unix timestamp (миллисекунды)
+                const timestamp = new Date(item.added.replace(' ', 'T')).getTime();
+                return [timestamp, item.value];
+              });
+
+              // Инициализация линейного графика
+              Highcharts.chart('lineChart', {
+                chart: {
+                  zooming: {
+                  type: 'x'
+                  }
+                },
+                title: { text: 'History'},
+                xAxis: {
+                  type: 'datetime'
+                },
+                yAxis: { title: { text: 'Value' } },
+                series: [{
+                  name: this.property_name+"("+this.info.description+")",
+                  step: this.step,
+                  data: values.sort(function(x, y) {
+                    if (x[0] === y[0]) {
+                      return 0;
+                    } else {
+                      return x[0] < y[0] ? -1 : 1
+                    }
+                  })
+                }]
+              });
+
+              // Подготовка данных для круговой диаграммы
+              this.sourceCounts = data.result.reduce((acc, item) => {
+                const source = item.source || 'Unknown';
+                acc[source] = (acc[source] || 0) + 1;
+                return acc;
+              }, {});
+
+              const pieData = Object.keys(this.sourceCounts).map(source => ({
+                name: source,
+                y: this.sourceCounts[source]
+              }));
+
+              // Инициализация круговой диаграммы
+              Highcharts.chart('pieChart', {
+                chart: { 
+                  type: 'pie',
+                  options3d: {
+                    enabled: true,
+                    alpha: 45,
+                    beta: 0
+                  },
+                },
+                plotOptions: {
+                    pie: {
+                        allowPointSelect: true,
+                        cursor: 'pointer',
+                        depth: 35,
+                        dataLabels: {
+                            enabled: true,
+                            format: '{point.name}'
+                        }
+                    }
+                },
+                title: { text: 'Distribution by sources' },
+                series: [{
+                  name: 'Sources',
+                  data: pieData
+                }]
+
+              });
+            } else {
+              console.error('Ошибка при загрузке данных');
+            }
+            this.loading = false
+          })
+          .catch(error => {
+            this.loading = false
+            console.error('Ошибка при запросе к API:', error);
+          });
+        },
+        // Форматирование даты
+        formatDate(dateString) {
+          const date = new Date(dateString);
+          return date.toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'});
+        },
+        // Переключение на предыдущую страницу
+        prevPage() {
+          if (this.currentPage > 1) {
+            this.currentPage--;
+          }
+        },
+        // Переключение на следующую страницу
+        nextPage() {
+          if (this.currentPage < this.totalPages) {
+            this.currentPage++;
+          }
+        },
+        // Переключение на указанную страницу
+        goToPage(page) {
+          if (page >= 1 && page <= this.totalPages) {
+            this.currentPage = page;
+          }
+        }
+      },
+      mounted() {
+        Highcharts.setOptions({                                            // This is for all plots, change Date axis to local timezone
+          time: {
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          }
+        });
+        this.fetchInfo()
+      }
+    });
+  </script>
 {% endblock %}
