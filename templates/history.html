@@ -5,12 +5,12 @@
   <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
 
   <!-- Highcharts -->
-  <script src="https://code.highcharts.com/highcharts.js"></script>
-  <script src="https://code.highcharts.com/highcharts-3d.js"></script>
-  <script src="https://code.highcharts.com/modules/exporting.js"></script>
-  <script src="https://code.highcharts.com/modules/export-data.js"></script>
-  <script src="https://code.highcharts.com/modules/accessibility.js"></script>
-
+  <script src="https://code.highcharts.com/stock/highstock.js"></script>
+  <script src="https://code.highcharts.com/stock/highstock-3d.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/export-data.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/accessibility.js"></script>
+  
   <div id="history_app">
     <h3>History <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
     <small>Description: [[info.object_description ?? "No description"]].[[info.description ?? "No description"]]</small>
@@ -35,6 +35,12 @@
     <div class="tab-content">
       <!-- Вкладка "Графики" -->
       <div v-if="viewCharts" class="tab-pane active" id="charts" role="tabpanel">
+        <div class="input-group my-3">
+          <label class="input-group-text" or="inputGroupSelect01">Preset</label>
+          <select class="form-select" id="inputGroupSelect01" v-model="chartType" @change="updateChart">
+            <option v-for="item in chartTypes" :value="item.value">[[item.title]]</option>
+          </select>
+        </div>
        <div id="lineChart" style="min-width: 310px; height: 500px; margin: 0 auto;"></div>
        <div id="pieChart" style="min-width: 310px; height: 400px; margin: 0 auto;"></div>
       </div>
@@ -97,6 +103,7 @@
           object_name: "{{object.name}}",
           property_name: "{{name}}",
           chartData: [],
+          values:[],
           sourceCounts: {},
           step: undefined,
           currentPage: 1, // Текущая страница пагинации
@@ -115,6 +122,13 @@
             {"title":"6 month", "value": 4320},
             {"title":"Year", "value": 8640},
             {"title":"All", "value": -1},
+          ],
+          chartType: "line",
+          chartTypes: [
+            {"title":"Line", "value": 'line'},
+            {"title":"Column", "value": 'column'},
+            {"title":"Spline", "value": 'spline'},
+            {"title":"Area", "value": 'area'},
           ]
         };
       },
@@ -182,47 +196,27 @@
           const { dtBegin, dtEnd } = this.getDateTimeRange();
           console.log(dtBegin, dtEnd)
 
-          fetch(`/api/property/history?object={{object.name}}&property={{name}}&dt_begin=${dtBegin}&dt_end=${dtEnd}`)
+          fetch(`/api/property/history?object=${this.object_name}&property=${this.property_name}&dt_begin=${dtBegin}&dt_end=${dtEnd}`)
           .then(response => response.json())
           .then(data => {
             if (data.success) {
               this.chartData = this.sortDataByDateDescending(data.result);
 
-              if (!this.viewCharts)
+              if (!this.viewCharts){
+                this.loading = false
                 return
+              }
 
               // Подготовка данных для линейного графика
-              const values = data.result.map(item => {
+              this.values = data.result.map(item => {
                 // Преобразуем строку даты в объект Date и затем в Unix timestamp (миллисекунды)
                 const timestamp = new Date(item.added.replace(' ', 'T')).getTime();
                 return [timestamp, item.value];
               });
 
-              // Инициализация линейного графика
-              Highcharts.chart('lineChart', {
-                chart: {
-                  zooming: {
-                  type: 'x'
-                  }
-                },
-                title: { text: 'History'},
-                xAxis: {
-                  type: 'datetime'
-                },
-                yAxis: { title: { text: 'Value' } },
-                series: [{
-                  name: this.property_name+"("+this.info.description+")",
-                  step: this.step,
-                  data: values.sort(function(x, y) {
-                    if (x[0] === y[0]) {
-                      return 0;
-                    } else {
-                      return x[0] < y[0] ? -1 : 1
-                    }
-                  })
-                }]
-              });
+              this.updateChart()
 
+              
               // Подготовка данных для круговой диаграммы
               this.sourceCounts = data.result.reduce((acc, item) => {
                 const source = item.source || 'Unknown';
@@ -272,6 +266,87 @@
             this.loading = false
             console.error('Ошибка при запросе к API:', error);
           });
+        },
+        updateChart(){
+          if (this.chartType=='line')
+            this.linePreset()
+          else if (this.chartType=='column')
+            this.linePreset()
+          else if (this.chartType=='spline')
+            this.linePreset()
+          else if (this.chartType=='area')
+            this.linePreset()
+        },
+        linePreset(){
+          // Create a timer
+          const start = +new Date();
+          // Инициализация линейного графика
+          Highcharts.chart('lineChart', {
+                chart: {
+                  events: {
+                      load: function () {
+                          if (!window.TestController) {
+                              this.setTitle(null, {
+                                  text:
+                                      'Built chart in ' + (new Date() - start) + 'ms'
+                              });
+                          }
+                      },
+                      // Добавляем событие после завершения зума для показа кнопки "Сброс Zoom"
+                      afterSetExtremes: function () {
+                        const chart = this.chart;
+                        if (!chart.resetZoomButton) {
+                          chart.showResetZoom(); // Показываем кнопку "Сброс Zoom"
+                        }
+                      }
+                  },
+                  type: this.chartType,
+                  zooming: {
+                    type: 'x'
+                  },
+                  resetZoomButton: true,
+                },
+                rangeSelector: {
+                  enabled: true, // Включаем RangeSelector
+                  buttons: [
+                    { type: 'day', count: 1, text: '1D' }, // Выбор последних 1 дня
+                    { type: 'week', count: 1, text: '1W' }, // Выбор последней недели
+                    { type: 'month', count: 1, text: '1M' }, // Выбор последнего месяца
+                    { type: 'year', count: 1, text: '1Y' }, // Выбор последнего года
+                    { type: 'all', text: 'All' } // Выбор всего диапазона
+                  ],
+                  selected: 4, // По умолчанию выбран "All"
+                  inputEnabled: false
+                },
+                navigator: {
+                  enabled: true, // Включаем Navigator (превью графика)
+                  series: {
+                    color: '#0000FF', // Цвет превью
+                    lineColor: '#0000FF' // Цвет линии превью
+                  }
+                },
+                title: { text: 'History'},
+                xAxis: {
+                  type: 'datetime',
+                  crosshair: true // Показывать перекрестие при наведении
+                },
+                yAxis: { title: { text: 'Value' } },
+                series: [{
+                  name: this.property_name+"("+this.info.description+")",
+                  step: this.step,
+                  turboThreshold: 0, // Отключаем оптимизацию для точек
+                  data: this.values.sort(function(x, y) {
+                    if (x[0] === y[0]) {
+                      return 0;
+                    } else {
+                      return x[0] < y[0] ? -1 : 1
+                    }
+                  }),
+                  //color: '#FF3333',
+                  //negativeColor: '#48AFE8',
+                }]
+              });
+
         },
         // Форматирование даты
         formatDate(dateString) {
