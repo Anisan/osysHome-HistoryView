@@ -60,7 +60,6 @@
             <tr v-for="(item, index) in paginatedData" :key="item.id">
               <td>[[ item.value ]]</td>
               <td>[[ formatDate(item.added) ]]</td>
-              <td>[[ item.added ]]</td>
               <td>[[ item.source || 'Unknown' ]]</td>
               <td><a :href="'?op=delete&id='+item.id+'&object={{object.id}}&name={{name}}'" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-sm btn-danger" title="Delete"><i class="feather icon-trash"></i></a></td>
             </tr>
