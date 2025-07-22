@@ -12,23 +12,23 @@
   <script src="/HistoryView/static/highcharts/accessibility.js"></script>
   
   <div id="history_app">
-    <h3>History <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
-    <small>Description: [[info.object_description ?? "No description"]].[[info.description ?? "No description"]]</small>
+    <h3>{{ _('History')}} <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
+    <small>{{ _('Description')}}: [[info.object_description ?? "{{ _('No description')}}"]].[[info.description ?? "{{ _('No description')}}"]]</small>
     <div class="my-2">
-      Periods: <div class="btn mx-1" :class="period == item.value ? 'btn-primary':'btn-secondary'" v-for="item in periods" @click="period = item.value">[[item.title]]</div>
-      <span v-if="!loading">Count values: [[chartData.length]]</span>
+      {{ _('Periods')}}: <div class="btn mx-1" :class="period == item.value ? 'btn-primary':'btn-secondary'" v-for="item in periods" @click="period = item.value">[[item.title]]</div>
+      <span v-if="!loading">{{ _('Count values')}}: [[chartData.length]]</span>
       <i v-else class="fa-solid fa-spinner fa-spin"></i>
     </div>
     <!-- Вкладки -->
     <ul class="nav nav-tabs" role="tablist">
       <li v-if="viewCharts" class="nav-item">
-        <a class="nav-link active" data-bs-toggle="tab" href="#charts">Graph</a>
+        <a class="nav-link active" data-bs-toggle="tab" href="#charts">{{ _('Graph')}}</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" :class="{ active : !viewCharts}" data-bs-toggle="tab" href="#table">Table</a>
+        <a class="nav-link" :class="{ active : !viewCharts}" data-bs-toggle="tab" href="#table">{{ _('Table')}}</a>
       </li>
       <li class="nav-item">
-        <a class="nav-link" data-bs-toggle="tab" href="#info">Info</a>
+        <a class="nav-link" data-bs-toggle="tab" href="#info">{{ _('Info')}}</a>
       </li>
     </ul>
     <!-- Содержимое вкладок -->
@@ -36,7 +36,7 @@
       <!-- Вкладка "Графики" -->
       <div v-if="viewCharts" class="tab-pane active" id="charts" role="tabpanel">
         <div class="input-group my-3">
-          <label class="input-group-text" or="inputGroupSelect01">Preset</label>
+          <label class="input-group-text" or="inputGroupSelect01">{{ _('Preset')}}</label>
           <select class="form-select" id="inputGroupSelect01" v-model="chartType" @change="updateChart">
             <option v-for="item in chartTypes" :value="item.value">[[item.title]]</option>
           </select>
@@ -50,9 +50,9 @@
         <table class="table table-striped">
           <thead>
             <tr>
-              <th>Value</th>
-              <th>Changed</th>
-              <th>Source</th>
+              <th>{{ _('Value')}}</th>
+              <th>{{ _('Changed')}}</th>
+              <th>{{ _('Source')}}</th>
               <th></th>
             </tr>
           </thead>
@@ -61,7 +61,7 @@
               <td>[[ item.value ]]</td>
               <td>[[ formatDate(item.added) ]]</td>
               <td>[[ item.source || 'Unknown' ]]</td>
-              <td><a :href="'?op=delete&id='+item.id+'&object={{object.id}}&name={{name}}'" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-sm btn-danger" title="Delete"><i class="feather icon-trash"></i></a></td>
+              <td><a :href="'?op=delete&id='+item.id+'&object={{object.id}}&name={{name}}'" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-sm btn-danger" title="{{ _('Delete')}}"><i class="feather icon-trash"></i></a></td>
             </tr>
           </tbody>
         </table>
@@ -70,23 +70,23 @@
         <nav aria-label="Page navigation" class="mt-4">
           <ul class="pagination justify-content-center">
             <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <a class="page-link" href="#" @click="prevPage">Prev</a>
+              <a class="page-link" href="#" @click="prevPage">{{ _('Prev')}}</a>
             </li>
             <li v-for="(page,index) in totalPages" :key="page" class="page-item" :class="{ active: page === currentPage }">
               <a class="page-link" href="#" @click="goToPage(page)">[[page]]</a>
             </li>
             <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <a class="page-link" href="#" @click="nextPage">Next</a>
+              <a class="page-link" href="#" @click="nextPage">{{ _('Next')}}</a>
             </li>
           </ul>
         </nav>
       </div>
       <div class="tab-pane p-3" id="info" role="tabpanel">
-        Name: <b>[[info.name]]</b><br>
-        Description: <b>[[info.description ?? '-']]</b><br>
-        Type: <b>[[info.type ?? '-']]</b><br>
-        History: <b>[[info.history]]</b><br>
-        Link: <span class="badge bg-success text-light" v-for="item in info.linked">[[item]]</span><br>
+        {{ _('Name')}}: <b>[[info.name]]</b><br>
+        {{ _('Description')}}: <b>[[info.description ?? '-']]</b><br>
+        {{ _('Type')}}: <b>[[info.type ?? '-']]</b><br>
+        {{ _('History')}}: <b>[[info.history]]</b><br>
+        {{ _('Link')}}: <span class="badge bg-success text-light" v-for="item in info.linked">[[item]]</span><br>
        </div>
     </div>
   </div>
@@ -109,25 +109,25 @@
           pageSize: 25, // Количество элементов на странице
           period:1,
           periods:[
-            {"title":"1 hour", "value": 1},
-            {"title":"3 hour", "value": 3},
-            {"title":"6 hour", "value": 6},
-            {"title":"12 hour", "value": 12},
-            {"title":"Day", "value": 24},
-            {"title":"Week", "value": 168},
-            {"title":"2 week", "value": 336},
-            {"title":"Month", "value": 720},
-            {"title":"3 month", "value": 2160},
-            {"title":"6 month", "value": 4320},
-            {"title":"Year", "value": 8640},
-            {"title":"All", "value": -1},
+            {"title":"1 {{ _('hour') }}", "value": 1},
+            {"title":"3 {{ _('hours') }}", "value": 3},
+            {"title":"6 {{ _('hours') }}", "value": 6},
+            {"title":"12 {{ _('hours') }}", "value": 12},
+            {"title":"{{ _('Day') }}", "value": 24},
+            {"title":"{{ _('Week') }}", "value": 168},
+            {"title":"2 {{ _('weeks') }}", "value": 336},
+            {"title":"{{ _('Month') }}", "value": 720},
+            {"title":"3 {{ _('months') }}", "value": 2160},
+            {"title":"6 {{ _('months') }}", "value": 4320},
+            {"title":"{{ _('Year') }}", "value": 8640},
+            {"title":"{{ _('All') }}", "value": -1},
           ],
           chartType: "line",
           chartTypes: [
-            {"title":"Line", "value": 'line'},
-            {"title":"Column", "value": 'column'},
-            {"title":"Spline", "value": 'spline'},
-            {"title":"Area", "value": 'area'},
+            {"title":"{{ _('Line') }}", "value": 'line'},
+            {"title":"{{ _('Column') }}", "value": 'column'},
+            {"title":"{{ _('Spline') }}", "value": 'spline'},
+            {"title":"{{ _('Area') }}", "value": 'area'},
           ]
         };
       },
@@ -249,9 +249,9 @@
                         }
                     }
                 },
-                title: { text: 'Distribution by sources' },
+                title: { text: "{{ _('Distribution by sources')}}" },
                 series: [{
-                  name: 'Sources',
+                  name: "{{ _('Sources')}}",
                   data: pieData
                 }]
 
@@ -287,7 +287,7 @@
                           if (!window.TestController) {
                               this.setTitle(null, {
                                   text:
-                                      'Built chart in ' + (new Date() - start) + 'ms'
+                                      "{{ _('Built chart in')}} " + (new Date() - start) + "ms"
                               });
                           }
                       },
@@ -324,12 +324,12 @@
                     lineColor: '#0000FF' // Цвет линии превью
                   }
                 },
-                title: { text: 'History'},
+                title: { text: "{{ _('History')}}"},
                 xAxis: {
                   type: 'datetime',
                   crosshair: true // Показывать перекрестие при наведении
                 },
-                yAxis: { title: { text: 'Value' } },
+                yAxis: { title: { text: "{{ _('Value')}}" } },
                 series: [{
                   name: this.property_name+"("+this.info.description+")",
                   step: this.step,
