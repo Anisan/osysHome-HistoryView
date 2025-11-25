@@ -152,6 +152,370 @@
         },
       },
       methods: {
+        // Получение цветов из CSS переменных Bootstrap 5
+        getBootstrapColors() {
+          // Получаем актуальный элемент body с учетом текущей темы
+          const body = document.querySelector('[data-tag="body"]') || document.body;
+          const currentTheme = body.getAttribute('data-bs-theme');
+          const isDark = currentTheme === 'dark';
+          
+          // Получаем CSS переменные Bootstrap 5 из вычисленных стилей
+          const getCSSVariable = (varName) => {
+            const value = getComputedStyle(body).getPropertyValue(varName).trim();
+            // Если значение пустое, возвращаем null
+            return value || null;
+          };
+          
+          // Получаем значения с fallback на значения по умолчанию
+          const primary = getCSSVariable('--bs-primary') || (isDark ? '#0d6efd' : '#0d6efd');
+          const secondary = getCSSVariable('--bs-secondary') || (isDark ? '#6c757d' : '#6c757d');
+          const textColor = getCSSVariable('--bs-body-color') || (isDark ? '#fff' : '#212529');
+          const backgroundColor = getCSSVariable('--bs-body-bg') || (isDark ? '#212529' : '#fff');
+          const borderColor = getCSSVariable('--bs-border-color') || (isDark ? '#495057' : '#dee2e6');
+          
+          const colors = {
+            // Основные цвета
+            primary: primary,
+            secondary: secondary,
+            success: getCSSVariable('--bs-success') || (isDark ? '#198754' : '#198754'),
+            danger: getCSSVariable('--bs-danger') || (isDark ? '#dc3545' : '#dc3545'),
+            warning: getCSSVariable('--bs-warning') || (isDark ? '#ffc107' : '#ffc107'),
+            info: getCSSVariable('--bs-info') || (isDark ? '#0dcaf0' : '#0dcaf0'),
+            
+            // Цвета текста и фона
+            textColor: textColor,
+            backgroundColor: backgroundColor,
+            
+            // Цвета границ
+            borderColor: borderColor,
+            
+            // Дополнительные цвета для графиков
+            gridLineColor: borderColor,
+            minorGridLineColor: getCSSVariable('--bs-border-color') || (isDark ? '#343a40' : '#e9ecef'),
+            
+            // Цвета для rangeSelector и navigator
+            rangeSelectorButton: isDark ? '#495057' : '#f8f9fa',
+            rangeSelectorButtonHover: isDark ? '#6c757d' : '#e9ecef',
+            rangeSelectorButtonActive: primary,
+          };
+          
+          console.log('Bootstrap colors retrieved for theme:', currentTheme, colors);
+          return colors;
+        },
+        // Применение темы Bootstrap 5 к Highcharts
+        applyBootstrapTheme() {
+          const colors = this.getBootstrapColors();
+          console.log('Applying Bootstrap theme, colors:', colors);
+          
+          Highcharts.setOptions({
+            time: {
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+            },
+            colors: [
+              colors.primary,
+              colors.success,
+              colors.info,
+              colors.warning,
+              colors.danger,
+              colors.secondary,
+              '#fd7e14',
+              '#20c997',
+              '#6f42c1',
+              '#d63384'
+            ],
+            chart: {
+              backgroundColor: colors.backgroundColor,
+              borderColor: colors.borderColor,
+              style: {
+                color: colors.textColor,
+                fontFamily: 'var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)'
+              }
+            },
+            title: {
+              style: {
+                color: colors.textColor
+              }
+            },
+            subtitle: {
+              style: {
+                color: colors.textColor
+              }
+            },
+            xAxis: {
+              gridLineColor: colors.gridLineColor,
+              lineColor: colors.borderColor,
+              minorGridLineColor: colors.minorGridLineColor,
+              tickColor: colors.borderColor,
+              title: {
+                style: {
+                  color: colors.textColor
+                }
+              },
+              labels: {
+                style: {
+                  color: colors.textColor
+                }
+              }
+            },
+            yAxis: {
+              gridLineColor: colors.gridLineColor,
+              lineColor: colors.borderColor,
+              minorGridLineColor: colors.minorGridLineColor,
+              tickColor: colors.borderColor,
+              title: {
+                style: {
+                  color: colors.textColor
+                }
+              },
+              labels: {
+                style: {
+                  color: colors.textColor
+                }
+              }
+            },
+            legend: {
+              backgroundColor: colors.backgroundColor,
+              itemStyle: {
+                color: colors.textColor
+              },
+              itemHoverStyle: {
+                color: colors.primary
+              },
+              itemHiddenStyle: {
+                color: colors.secondary
+              }
+            },
+            credits: {
+              style: {
+                color: colors.secondary
+              }
+            },
+            labels: {
+              style: {
+                color: colors.textColor
+              }
+            },
+            tooltip: {
+              backgroundColor: colors.backgroundColor,
+              borderColor: colors.borderColor,
+              style: {
+                color: colors.textColor
+              }
+            },
+            plotOptions: {
+              series: {
+                borderColor: colors.borderColor
+              },
+              boxplot: {
+                fillColor: colors.backgroundColor
+              },
+              candlestick: {
+                lineColor: colors.textColor
+              },
+              errorbar: {
+                color: colors.textColor
+              }
+            },
+            rangeSelector: {
+              buttonTheme: {
+                fill: colors.rangeSelectorButton,
+                stroke: colors.borderColor,
+                style: {
+                  color: colors.textColor
+                },
+                states: {
+                  hover: {
+                    fill: colors.rangeSelectorButtonHover,
+                    stroke: colors.borderColor,
+                    style: {
+                      color: colors.textColor
+                    }
+                  },
+                  select: {
+                    fill: colors.rangeSelectorButtonActive,
+                    stroke: colors.borderColor,
+                    style: {
+                      color: '#fff'
+                    }
+                  }
+                }
+              },
+              inputBoxBorderColor: colors.borderColor,
+              inputStyle: {
+                backgroundColor: colors.backgroundColor,
+                color: colors.textColor
+              },
+              labelStyle: {
+                color: colors.textColor
+              }
+            },
+            navigator: {
+              handles: {
+                backgroundColor: colors.backgroundColor,
+                borderColor: colors.borderColor
+              },
+              outlineColor: colors.borderColor,
+              maskFill: 'rgba(0, 0, 0, 0.1)',
+              series: {
+                color: colors.primary,
+                lineColor: colors.primary
+              },
+              xAxis: {
+                gridLineColor: colors.gridLineColor
+              }
+            },
+            scrollbar: {
+              barBackgroundColor: colors.rangeSelectorButton,
+              barBorderColor: colors.borderColor,
+              buttonArrowColor: colors.textColor,
+              buttonBackgroundColor: colors.backgroundColor,
+              buttonBorderColor: colors.borderColor,
+              rifleColor: colors.textColor,
+              trackBackgroundColor: colors.backgroundColor,
+              trackBorderColor: colors.borderColor
+            }
+          });
+        },
+        // Обновление графиков при смене темы
+        updateChartsTheme() {
+          console.log('Updating charts theme...');
+          
+          // ВСЕГДА применяем тему Bootstrap 5 (обновляем глобальные настройки Highcharts)
+          // Это должно быть сделано независимо от наличия данных
+          this.applyBootstrapTheme();
+          
+          // Задержка, чтобы CSS переменные точно обновились
+          setTimeout(() => {
+            // Находим существующие графики
+            const existingLineChart = Highcharts.charts.find(chart => 
+              chart && chart.renderTo && chart.renderTo.id === 'lineChart'
+            );
+            const existingPieChart = Highcharts.charts.find(chart => 
+              chart && chart.renderTo && chart.renderTo.id === 'pieChart'
+            );
+            
+            // Если есть данные - пересоздаем графики с новой темой
+            if (this.values && this.values.length > 0) {
+              // Уничтожаем и пересоздаем линейный график
+              if (existingLineChart) {
+                console.log('Destroying existing line chart to recreate with new theme');
+                existingLineChart.destroy();
+              }
+              
+              // Небольшая пауза перед пересозданием
+              setTimeout(() => {
+                console.log('Recreating line chart with new theme');
+                this.updateChart();
+              }, 50);
+            } else if (existingLineChart) {
+              // Если данных нет, но график существует - обновляем его тему через update()
+              console.log('No data available, updating existing chart theme');
+              try {
+                const colors = this.getBootstrapColors();
+                existingLineChart.update({
+                  chart: {
+                    backgroundColor: colors.backgroundColor,
+                    style: {
+                      color: colors.textColor
+                    }
+                  },
+                  title: {
+                    style: {
+                      color: colors.textColor
+                    }
+                  },
+                  xAxis: {
+                    gridLineColor: colors.gridLineColor,
+                    lineColor: colors.borderColor,
+                    tickColor: colors.borderColor,
+                    labels: {
+                      style: {
+                        color: colors.textColor
+                      }
+                    }
+                  },
+                  yAxis: {
+                    gridLineColor: colors.gridLineColor,
+                    lineColor: colors.borderColor,
+                    tickColor: colors.borderColor,
+                    labels: {
+                      style: {
+                        color: colors.textColor
+                      }
+                    }
+                  }
+                }, true); // true = redraw
+              } catch (e) {
+                console.error('Error updating chart theme:', e);
+              }
+            }
+            
+            // Обновляем круговую диаграмму, если есть данные
+            if (this.sourceCounts && Object.keys(this.sourceCounts).length > 0) {
+              // Уничтожаем и пересоздаем круговую диаграмму
+              if (existingPieChart) {
+                console.log('Destroying existing pie chart to recreate with new theme');
+                existingPieChart.destroy();
+              }
+              
+              setTimeout(() => {
+                const pieData = Object.keys(this.sourceCounts).map(source => ({
+                  name: source,
+                  y: this.sourceCounts[source]
+                }));
+                
+                console.log('Recreating pie chart with new theme');
+                Highcharts.chart('pieChart', {
+                  chart: { 
+                    type: 'pie',
+                    options3d: {
+                      enabled: true,
+                      alpha: 45,
+                      beta: 0
+                    },
+                  },
+                  plotOptions: {
+                      pie: {
+                          allowPointSelect: true,
+                          cursor: 'pointer',
+                          depth: 35,
+                          dataLabels: {
+                              enabled: true,
+                              format: '{point.name}'
+                          }
+                      }
+                  },
+                  title: { text: "{{ _('Distribution by sources')}}" },
+                  series: [{
+                    name: "{{ _('Sources')}}",
+                    data: pieData
+                  }]
+                });
+              }, 50);
+            } else if (existingPieChart) {
+              // Если данных нет, но график существует - обновляем его тему
+              console.log('No pie data available, updating existing pie chart theme');
+              try {
+                const colors = this.getBootstrapColors();
+                existingPieChart.update({
+                  chart: {
+                    backgroundColor: colors.backgroundColor,
+                    style: {
+                      color: colors.textColor
+                    }
+                  },
+                  title: {
+                    style: {
+                      color: colors.textColor
+                    }
+                  }
+                }, true); // true = redraw
+              } catch (e) {
+                console.error('Error updating pie chart theme:', e);
+              }
+            }
+          }, 150);
+        },
         // Формирование временного диапазона для последнего часа
         getDateTimeRange() {
           const now = new Date();
@@ -199,13 +563,17 @@
           .then(response => response.json())
           .then(data => {
             if (data.success) {
+              // ВСЕГДА применяем тему Bootstrap 5 перед обработкой данных
+              // Это гарантирует, что тема будет применена даже если данных нет или они пустые
+              this.applyBootstrapTheme();
+              
               this.chartData = this.sortDataByDateDescending(data.result);
 
               if (!this.viewCharts){
                 this.loading = false
                 return
               }
-
+              
               // Подготовка данных для линейного графика
               this.values = data.result.map(item => {
                 // Преобразуем строку даты в объект Date и затем в Unix timestamp (миллисекунды)
@@ -213,7 +581,10 @@
                 return [timestamp, item.value];
               });
 
-              this.updateChart()
+              // Небольшая задержка, чтобы тема точно применилась
+              setTimeout(() => {
+                this.updateChart();
+              }, 50);
 
               
               // Подготовка данных для круговой диаграммы
@@ -266,16 +637,24 @@
             console.error('Ошибка при запросе к API:', error);
           });
         },
-        updateChart(){
-          if (this.chartType=='line')
-            this.linePreset()
-          else if (this.chartType=='column')
-            this.linePreset()
-          else if (this.chartType=='spline')
-            this.linePreset()
-          else if (this.chartType=='area')
-            this.linePreset()
-        },
+         updateChart(){
+           // Уничтожаем существующий график, если он есть
+           const existingChart = Highcharts.charts.find(chart => 
+             chart && chart.renderTo && chart.renderTo.id === 'lineChart'
+           );
+           if (existingChart) {
+             existingChart.destroy();
+           }
+           
+           if (this.chartType=='line')
+             this.linePreset()
+           else if (this.chartType=='column')
+             this.linePreset()
+           else if (this.chartType=='spline')
+             this.linePreset()
+           else if (this.chartType=='area')
+             this.linePreset()
+         },
         linePreset(){
           // Create a timer
           const start = +new Date();
@@ -320,8 +699,8 @@
                 navigator: {
                   enabled: true, // Включаем Navigator (превью графика)
                   series: {
-                    color: '#0000FF', // Цвет превью
-                    lineColor: '#0000FF' // Цвет линии превью
+                    color: this.getBootstrapColors().primary, // Цвет превью из Bootstrap 5
+                    lineColor: this.getBootstrapColors().primary // Цвет линии превью из Bootstrap 5
                   }
                 },
                 title: { text: "{{ _('History')}}"},
@@ -372,11 +751,58 @@
         }
       },
       mounted() {
-        Highcharts.setOptions({                                            // This is for all plots, change Date axis to local timezone
-          time: {
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-          }
+        // Применяем тему Bootstrap 5 при инициализации
+        this.applyBootstrapTheme();
+        
+        // Отслеживаем изменения темы Bootstrap 5
+        const body = document.querySelector('[data-tag="body"]') || document.body;
+        const self = this;
+        
+        // MutationObserver для отслеживания изменений атрибута data-bs-theme
+        const themeObserver = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
+              // Тема изменилась, обновляем графики
+              console.log('Theme changed to:', body.getAttribute('data-bs-theme'));
+              self.updateChartsTheme();
+            }
+          });
         });
+        
+        // Начинаем наблюдение за изменениями атрибута data-bs-theme
+        themeObserver.observe(body, {
+          attributes: true,
+          attributeFilter: ['data-bs-theme']
+        });
+        
+        // Также слушаем клики на переключатель темы (на случай, если MutationObserver не сработает)
+        const themeToggle = document.querySelector('.theme-toggle');
+        if (themeToggle) {
+          themeToggle.addEventListener('click', () => {
+            // Небольшая задержка, чтобы дать время Bootstrap обновить атрибут и CSS переменные
+            setTimeout(() => {
+              console.log('Theme toggle clicked, current theme:', body.getAttribute('data-bs-theme'));
+              self.updateChartsTheme();
+            }, 200);
+          });
+        }
+        
+        // Сохраняем начальную тему для отслеживания изменений
+        self._lastTheme = body.getAttribute('data-bs-theme');
+        
+        // Дополнительная проверка изменений темы (на случай, если MutationObserver пропустит)
+        const checkThemeChange = () => {
+          const currentTheme = body.getAttribute('data-bs-theme');
+          if (self._lastTheme !== currentTheme) {
+            console.log('Theme changed from', self._lastTheme, 'to', currentTheme);
+            self._lastTheme = currentTheme;
+            self.updateChartsTheme();
+          }
+        };
+        
+        // Периодически проверяем изменения темы (каждые 300мс)
+        setInterval(checkThemeChange, 300);
+        
         this.fetchInfo()
       }
     });
