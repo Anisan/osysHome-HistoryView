@@ -1,0 +1,518 @@
+<!-- Highcharts -->
+<script src="/HistoryView/static/highcharts/highstock.js"></script>
+<script src="/HistoryView/static/highcharts/exporting.js"></script>
+<script src="/HistoryView/static/highcharts/export-data.js"></script>
+<script src="/HistoryView/static/highcharts/accessibility.js"></script>
+
+<div id="widget_history_{{ widget_config.id }}" style="position: relative; height: 100%; display: flex; flex-direction: column;">
+  <div id="chart_{{ widget_config.id }}" style="flex: 1; min-height: 0; width: 100%;"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  
+  const widgetId = '{{ widget_config.id }}';
+  const chartContainerId = 'chart_' + widgetId;
+  const widgetConfig = {{ widget_config | tojson }};
+  const propertiesData = {{ properties_data | tojson }};
+  
+  // Get Bootstrap colors
+  function getBootstrapColors() {
+    const body = document.querySelector('[data-tag="body"]') || document.body;
+    const currentTheme = body.getAttribute('data-bs-theme');
+    const isDark = currentTheme === 'dark';
+    
+    const getCSSVariable = (varName) => {
+      const value = getComputedStyle(body).getPropertyValue(varName).trim();
+      return value || null;
+    };
+    
+    const primary = getCSSVariable('--bs-primary') || (isDark ? '#0d6efd' : '#0d6efd');
+    const textColor = getCSSVariable('--bs-body-color') || (isDark ? '#fff' : '#212529');
+    const backgroundColor = getCSSVariable('--bs-body-bg') || (isDark ? '#212529' : '#fff');
+    const borderColor = getCSSVariable('--bs-border-color') || (isDark ? '#495057' : '#dee2e6');
+    const gridLineColor = borderColor;
+    
+    return {
+      primary: primary,
+      textColor: textColor,
+      backgroundColor: backgroundColor,
+      borderColor: borderColor,
+      gridLineColor: gridLineColor
+    };
+  }
+  
+  // Apply Bootstrap theme to Highcharts
+  function applyBootstrapTheme() {
+    const colors = getBootstrapColors();
+    
+    Highcharts.setOptions({
+      time: {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      },
+      colors: [
+        colors.primary,
+        '#198754',
+        '#0dcaf0',
+        '#ffc107',
+        '#dc3545',
+        '#6c757d',
+        '#fd7e14',
+        '#20c997',
+        '#6f42c1',
+        '#d63384'
+      ],
+      chart: {
+        backgroundColor: colors.backgroundColor,
+        borderColor: colors.borderColor,
+        style: {
+          color: colors.textColor,
+          fontFamily: 'var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)'
+        }
+      },
+      title: {
+        style: {
+          color: colors.textColor
+        }
+      },
+      xAxis: {
+        gridLineColor: colors.gridLineColor,
+        lineColor: colors.borderColor,
+        tickColor: colors.borderColor,
+        labels: {
+          style: {
+            color: colors.textColor
+          }
+        }
+      },
+      yAxis: {
+        gridLineColor: colors.gridLineColor,
+        lineColor: colors.borderColor,
+        tickColor: colors.borderColor,
+        labels: {
+          style: {
+            color: colors.textColor
+          }
+        }
+      },
+      legend: {
+        backgroundColor: colors.backgroundColor,
+        itemStyle: {
+          color: colors.textColor
+        },
+        itemHoverStyle: {
+          color: colors.primary
+        }
+      },
+      tooltip: {
+        backgroundColor: colors.backgroundColor,
+        borderColor: colors.borderColor,
+        style: {
+          color: colors.textColor
+        }
+      }
+    });
+  }
+  
+  // Calculate chart height based on widget container
+  function calculateChartHeight() {
+    const widgetContainer = document.getElementById('widget_history_' + widgetId);
+    const chartContainer = document.getElementById(chartContainerId);
+    
+    if (!widgetContainer || !chartContainer) {
+      return 300; // default fallback
+    }
+    
+    // Get the parent widget card
+    let widgetCard = widgetContainer.closest('.card');
+    if (!widgetCard) {
+      widgetCard = widgetContainer.closest('.widget-card');
+    }
+    if (!widgetCard) {
+      widgetCard = widgetContainer.parentElement;
+    }
+    
+    if (widgetCard) {
+      const cardHeight = widgetCard.offsetHeight || widgetCard.clientHeight;
+      const padding = 20; // padding for widget
+      const calculatedHeight = Math.max(200, cardHeight - padding);
+      return calculatedHeight;
+    }
+    
+    // Fallback: use container's available height
+    const containerHeight = chartContainer.parentElement.offsetHeight || chartContainer.parentElement.clientHeight;
+    return Math.max(200, containerHeight - 50);
+  }
+  
+  // Create chart
+  function createChart() {
+    applyBootstrapTheme();
+    
+    const colors = getBootstrapColors();
+    const chartType = widgetConfig.chart_type || 'line';
+    
+    // Check if pie chart
+    if (chartType === 'pie') {
+      // Prepare pie chart data
+      const pieData = [];
+      for (const [propName, data] of Object.entries(propertiesData)) {
+        if (data && data.length > 0) {
+          // Data format: [['Value1', count1], ['Value2', count2], ...]
+          pieData.push(...data.map(item => ({
+            name: item[0] + ' (' + propName + ')',
+            y: item[1]
+          })));
+        }
+      }
+      
+      if (pieData.length === 0) {
+        document.getElementById(chartContainerId).innerHTML = 
+          '<div style="text-align: center; padding: 20px; color: ' + colors.textColor + ';">{{ _("No data available") }}</div>';
+        return;
+      }
+      
+      const chartHeight = calculateChartHeight();
+      
+      const chartOptions = {
+        chart: {
+          renderTo: chartContainerId,
+          type: 'pie',
+          height: chartHeight
+        },
+        title: {
+          text: '{{ widget_config.name }}'
+        },
+        plotOptions: {
+          pie: {
+            allowPointSelect: true,
+            cursor: 'pointer',
+            dataLabels: {
+              enabled: widgetConfig.show_legend !== false,
+              format: '<b>{point.name}</b>: {point.percentage:.1f} %'
+            },
+            showInLegend: widgetConfig.show_legend !== false
+          }
+        },
+        series: [{
+          name: 'Values',
+          data: pieData
+        }],
+        credits: {
+          enabled: false
+        },
+        exporting: {
+          enabled: {% if widget_config.show_context_menu %}true{% else %}false{% endif %}
+        }
+      };
+      
+      const chart = new Highcharts.Chart(chartOptions);
+      
+      window['chart_' + widgetId] = chart;
+      return chart;
+    }
+    
+    // For other chart types (line, column, spline, area)
+    const series = [];
+    
+    // Prepare series data
+    for (const [propName, data] of Object.entries(propertiesData)) {
+      if (data && data.length > 0) {
+        series.push({
+          name: propName,
+          data: data,
+          type: chartType
+        });
+      }
+    }
+    
+    if (series.length === 0) {
+      // No data available
+      document.getElementById(chartContainerId).innerHTML = 
+        '<div style="text-align: center; padding: 20px; color: ' + colors.textColor + ';">{{ _("No data available") }}</div>';
+      return;
+    }
+    
+    const chartHeight = calculateChartHeight();
+    
+    const chartOptions = {
+      chart: {
+        renderTo: chartContainerId,
+        type: chartType,
+        height: chartHeight,
+        zooming: {
+          type: 'x'
+        },
+        resetZoomButton: true
+      },
+      title: {
+        text: '{{ widget_config.name }}'
+      },
+      xAxis: {
+        type: 'datetime',
+        crosshair: true
+      },
+      yAxis: {
+        title: {
+          text: null
+        }
+      },
+      legend: {
+        enabled: widgetConfig.show_legend !== false
+      },
+      navigator: {
+        enabled: widgetConfig.show_navigator !== false,
+        series: {
+          color: colors.primary,
+          lineColor: colors.primary
+        }
+      },
+      rangeSelector: {
+        enabled: widgetConfig.show_range_selector !== false,
+        buttons: [
+          { type: 'hour', count: 1, text: '1h' },
+          { type: 'hour', count: 6, text: '6h' },
+          { type: 'day', count: 1, text: '1D' },
+          { type: 'week', count: 1, text: '1W' },
+          { type: 'month', count: 1, text: '1M' },
+          { type: 'all', text: 'All' }
+        ],
+        selected: widgetConfig.show_range_selector !== false ? 5 : undefined,
+        inputEnabled: false
+      },
+      series: series,
+      credits: {
+        enabled: false
+      },
+      exporting: {
+        enabled: {% if widget_config.show_context_menu %}true{% else %}false{% endif %}
+      }
+    };
+    
+    // Create chart
+    const chart = new Highcharts.StockChart(chartOptions);
+    
+    // Store chart reference for resize handling
+    window['chart_' + widgetId] = chart;
+    
+    return chart;
+  }
+  
+  // Handle resize
+  function handleResize() {
+    const chart = window['chart_' + widgetId];
+    if (chart) {
+      const newHeight = calculateChartHeight();
+      chart.setSize(null, newHeight, false);
+    }
+  }
+  
+  // Initialize chart when DOM is ready
+  function initChart() {
+    // Wait a bit for layout to settle
+    setTimeout(() => {
+      createChart();
+      
+      // Watch for resize events
+      if (window.ResizeObserver) {
+        const widgetContainer = document.getElementById('widget_history_' + widgetId);
+        if (widgetContainer) {
+          const resizeObserver = new ResizeObserver(() => {
+            handleResize();
+          });
+          resizeObserver.observe(widgetContainer);
+        }
+      } else {
+        // Fallback for browsers without ResizeObserver
+        window.addEventListener('resize', handleResize);
+      }
+    }, 100);
+  }
+  
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initChart);
+  } else {
+    initChart();
+  }
+  
+  // Handle theme change
+  function handleThemeChange() {
+    const existingChart = window['chart_' + widgetId];
+    if (existingChart) {
+      // Apply new theme globally
+      applyBootstrapTheme();
+      
+      const colors = getBootstrapColors();
+      const chartType = widgetConfig.chart_type || 'line';
+      
+      // For pie chart, update with different options
+      if (chartType === 'pie') {
+        existingChart.update({
+          chart: {
+            backgroundColor: colors.backgroundColor,
+            style: {
+              color: colors.textColor
+            }
+          },
+          plotOptions: {
+            pie: {
+              dataLabels: {
+                style: {
+                  color: colors.textColor
+                }
+              }
+            }
+          },
+          legend: {
+            backgroundColor: colors.backgroundColor,
+            itemStyle: {
+              color: colors.textColor
+            },
+            itemHoverStyle: {
+              color: colors.primary
+            }
+          },
+          tooltip: {
+            backgroundColor: colors.backgroundColor,
+            borderColor: colors.borderColor,
+            style: {
+              color: colors.textColor
+            }
+          }
+        }, true);
+        return;
+      }
+      
+      // Update chart with all theme-related options for other chart types
+      existingChart.update({
+        chart: {
+          backgroundColor: colors.backgroundColor,
+          style: {
+            color: colors.textColor,
+            fontFamily: 'var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)'
+          }
+        },
+        title: {
+          style: {
+            color: colors.textColor
+          }
+        },
+        xAxis: {
+          gridLineColor: colors.gridLineColor,
+          lineColor: colors.borderColor,
+          tickColor: colors.borderColor,
+          labels: {
+            style: {
+              color: colors.textColor
+            }
+          }
+        },
+        yAxis: {
+          gridLineColor: colors.gridLineColor,
+          lineColor: colors.borderColor,
+          tickColor: colors.borderColor,
+          labels: {
+            style: {
+              color: colors.textColor
+            }
+          }
+        },
+        legend: {
+          backgroundColor: colors.backgroundColor,
+          itemStyle: {
+            color: colors.textColor
+          },
+          itemHoverStyle: {
+            color: colors.primary
+          }
+        },
+        tooltip: {
+          backgroundColor: colors.backgroundColor,
+          borderColor: colors.borderColor,
+          style: {
+            color: colors.textColor
+          }
+        },
+        rangeSelector: {
+          buttonTheme: {
+            fill: colors.backgroundColor,
+            stroke: colors.borderColor,
+            style: {
+              color: colors.textColor
+            },
+            states: {
+              hover: {
+                fill: colors.borderColor,
+                stroke: colors.borderColor,
+                style: {
+                  color: colors.textColor
+                }
+              },
+              select: {
+                fill: colors.primary,
+                stroke: colors.borderColor,
+                style: {
+                  color: '#fff'
+                }
+              }
+            }
+          },
+          inputBoxBorderColor: colors.borderColor,
+          inputStyle: {
+            backgroundColor: colors.backgroundColor,
+            color: colors.textColor
+          },
+          labelStyle: {
+            color: colors.textColor
+          }
+        },
+        navigator: {
+          handles: {
+            backgroundColor: colors.backgroundColor,
+            borderColor: colors.borderColor
+          },
+          outlineColor: colors.borderColor,
+          series: {
+            color: colors.primary,
+            lineColor: colors.primary
+          },
+          xAxis: {
+            gridLineColor: colors.gridLineColor
+          }
+        }
+      }, true); // true = redraw
+    }
+  }
+  
+  // Watch for theme changes
+  const body = document.querySelector('[data-tag="body"]') || document.body;
+  let lastTheme = body.getAttribute('data-bs-theme');
+  
+  const themeObserver = new MutationObserver(() => {
+    const currentTheme = body.getAttribute('data-bs-theme');
+    if (currentTheme !== lastTheme) {
+      lastTheme = currentTheme;
+      // Small delay to ensure CSS variables are updated
+      setTimeout(() => {
+        handleThemeChange();
+      }, 100);
+    }
+  });
+  
+  themeObserver.observe(body, {
+    attributes: true,
+    attributeFilter: ['data-bs-theme']
+  });
+  
+  // Also listen for theme toggle clicks (fallback)
+  const themeToggle = document.querySelector('.theme-toggle, [data-bs-theme-toggle], button[data-bs-theme]');
+  if (themeToggle) {
+    themeToggle.addEventListener('click', () => {
+      setTimeout(() => {
+        handleThemeChange();
+      }, 200);
+    });
+  }
+})();
+</script>
+

@@ -1,0 +1,78 @@
+{% extends "layouts/module_admin.html" %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="HistoryView">{{ _('HistoryView')}}</a></li>
+{% endblock %}
+{% block module %}
+<div class="card mb-3">
+  <div class="card-header">
+    <h4 class="mb-0">{{ _('Widgets Management') }}</h4>
+  </div>
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">{{ _('Widgets') }}</h5>
+      <a href="?op=create_widget" class="btn btn-primary btn-sm">{{ _('Create Widget') }}</a>
+    </div>
+    
+    {% if widgets %}
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>{{ _('Name') }}</th>
+            <th>{{ _('Properties') }}</th>
+            <th>{{ _('Period') }}</th>
+            <th>{{ _('Chart Type') }}</th>
+            <th>{{ _('Actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for widget in widgets %}
+          <tr>
+            <td>{{ widget.name }}</td>
+            <td>
+              {% for prop in widget.properties %}
+                <span class="badge bg-secondary me-1">{{ prop }}</span>
+              {% endfor %}
+            </td>
+            <td>
+              {% if widget.period == -1 %}
+                {{ _('All') }}
+              {% elif widget.period == 1 %}
+                1 {{ _('hour') }}
+              {% elif widget.period < 24 %}
+                {{ widget.period }} {{ _('hours') }}
+              {% elif widget.period == 24 %}
+                {{ _('Day') }}
+              {% elif widget.period == 168 %}
+                {{ _('Week') }}
+              {% elif widget.period == 336 %}
+                2 {{ _('weeks') }}
+              {% elif widget.period == 720 %}
+                {{ _('Month') }}
+              {% elif widget.period == 2160 %}
+                3 {{ _('months') }}
+              {% elif widget.period == 4320 %}
+                6 {{ _('months') }}
+              {% elif widget.period == 8640 %}
+                {{ _('Year') }}
+              {% endif %}
+            </td>
+            <td>{{ widget.chart_type }}</td>
+            <td>
+              <a href="?op=edit_widget&widget_id={{ widget.id }}" class="btn btn-sm btn-primary me-1">{{ _('Edit') }}</a>
+              <a href="?op=delete_widget&widget_id={{ widget.id }}" class="btn btn-sm btn-danger" 
+                 onclick="return confirm('{{ _('Are you sure?') }}')">{{ _('Delete') }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">{{ _('No widgets created yet.') }}</p>
+    <a href="?op=create_widget" class="btn btn-primary">{{ _('Create First Widget') }}</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+

@@ -1,5 +1,7 @@
 {% extends "layouts/module_admin.html" %}
-
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="HistoryView">{{ _('HistoryView')}}</a></li>
+{% endblock %}
 {% block module %}
   <!-- Vue 2 -->
   <script src="{{ config.ASSETS_ROOT }}/plugins/vue/vue@2.js"></script>

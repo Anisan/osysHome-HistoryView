@@ -1,0 +1,247 @@
+{% extends "layouts/module_admin.html" %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="HistoryView">{{ _('HistoryView')}}</a></li>
+{% endblock %}
+{% block module %}
+<script src="{{ config.ASSETS_ROOT }}/plugins/vue/vue@2.js"></script>
+<script src="{{ config.ASSETS_ROOT }}/plugins/vue/axios.min.js"></script>
+
+<div id="widget_form_app">
+  <div class="card mb-3">
+    <div class="card-header">
+      <h4 class="mb-0">{{ _('Widgets Management') }} - <span v-if="widget_edit">{{ _('Edit Widget') }}</span><span v-else>{{ _('Create Widget') }}</span></h4>
+    </div>
+    <div class="card-body">
+      <form method="POST" action="?op=save_widget" @submit.prevent="submitForm">
+        <input type="hidden" name="widget_id" :value="widget_edit ? widget_edit.id : 'new'">
+        
+        <div class="mb-3">
+          <label for="widget_name" class="form-label">{{ _('Widget Name') }}</label>
+          <input type="text" class="form-control" id="widget_name" name="widget_name" 
+                 v-model="formData.name" required>
+        </div>
+        
+        <div class="mb-3">
+          <label for="period" class="form-label">{{ _('Period') }}</label>
+          <select class="form-select" id="period" name="period" v-model="formData.period" required>
+            <option value="1">1 {{ _('hour') }}</option>
+            <option value="3">3 {{ _('hours') }}</option>
+            <option value="6">6 {{ _('hours') }}</option>
+            <option value="12">12 {{ _('hours') }}</option>
+            <option value="24">{{ _('Day') }}</option>
+            <option value="168">{{ _('Week') }}</option>
+            <option value="336">2 {{ _('weeks') }}</option>
+            <option value="720">{{ _('Month') }}</option>
+            <option value="2160">3 {{ _('months') }}</option>
+            <option value="4320">6 {{ _('months') }}</option>
+            <option value="8640">{{ _('Year') }}</option>
+            <option value="-1">{{ _('All') }}</option>
+          </select>
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">{{ _('Select Properties') }}</label>
+          <div v-for="(property, index) in formData.properties" :key="index" class="mb-2">
+            <div class="card">
+              <div class="card-body">
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-5">
+                    <label class="form-label small">{{ _('Linked object') }}</label>
+                    <select-with-filter 
+                      placeholder="{{ _('Select object') }}" 
+                      :options="objectOptions" 
+                      v-model="property.object" 
+                      @changed="property.property = null">
+                    </select-with-filter>
+                  </div>
+                  <div class="col-md-5" v-if="property.object && property.object in objects">
+                    <label class="form-label small">{{ _('Linked property') }}</label>
+                    <select-with-filter 
+                      placeholder="{{ _('Select property') }}" 
+                      :options="objects[property.object].properties" 
+                      v-model="property.property">
+                    </select-with-filter>
+                  </div>
+                  <div class="col-md-2 text-end">
+                    <button type="button" class="btn btn-sm btn-danger" 
+                            @click="removeProperty(index)" 
+                            v-if="formData.properties.length > 1"
+                            style="margin-top: 1.5rem;">
+                      <i class="fa-solid fa-trash"></i> {{ _('Remove') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mt-2">
+            <button type="button" class="btn btn-sm btn-primary" @click="addProperty">
+              <i class="fa-solid fa-plus"></i> {{ _('Add Property') }}
+            </button>
+          </div>
+          <input type="hidden" id="properties" name="properties" :value="propertiesString">
+        </div>
+        
+        <div class="mb-3">
+          <label for="chart_type" class="form-label">{{ _('Chart Type') }}</label>
+          <select class="form-select" id="chart_type" name="chart_type" v-model="formData.chart_type" required>
+            <option value="line">{{ _('Line') }}</option>
+            <option value="column">{{ _('Column') }}</option>
+            <option value="spline">{{ _('Spline') }}</option>
+            <option value="area">{{ _('Area') }}</option>
+            <option value="pie">{{ _('Pie') }}</option>
+          </select>
+        </div>
+        
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show_legend" name="show_legend" v-model="formData.show_legend">
+            <label class="form-check-label" for="show_legend">
+              {{ _('Show Legend') }}
+            </label>
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show_navigator" name="show_navigator" v-model="formData.show_navigator">
+            <label class="form-check-label" for="show_navigator">
+              {{ _('Show Navigator') }}
+            </label>
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show_range_selector" name="show_range_selector" v-model="formData.show_range_selector">
+            <label class="form-check-label" for="show_range_selector">
+              {{ _('Show Range Selector') }}
+            </label>
+          </div>
+        </div>
+        
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show_context_menu" name="show_context_menu" v-model="formData.show_context_menu">
+            <label class="form-check-label" for="show_context_menu">
+              {{ _('Show Context Menu Button') }}
+            </label>
+          </div>
+        </div>
+        
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">{{ _('Save Widget') }}</button>
+          <a href="?" class="btn btn-secondary">{{ _('Cancel') }}</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="{{ config.ASSETS_ROOT }}/js/components/select-with-filter.js"></script>
+<script>
+new Vue({
+  el: '#widget_form_app',
+  delimiters: ['[[', ']]'],
+  data: {
+    widget_edit: {% if widget_edit %}{{ widget_edit | tojson }}{% else %}null{% endif %},
+    objects: {},
+    formData: {
+      name: '',
+      period: 24,
+      chart_type: 'line',
+      show_legend: true,
+      show_navigator: true,
+      show_range_selector: true,
+      show_context_menu: false,
+      properties: [
+        { object: null, property: null }
+      ]
+    }
+  },
+  computed: {
+    objectOptions() {
+      const list = {};
+      Object.keys(this.objects).forEach(key => {
+        list[key] = this.objects[key].description;
+      });
+      return list;
+    },
+    propertiesString() {
+      return this.formData.properties
+        .filter(p => p.object && p.property)
+        .map(p => p.object + '.' + p.property)
+        .join(',');
+    }
+  },
+  methods: {
+    fetchObjects() {
+      axios.get('/api/object/list/details')
+        .then(response => {
+          this.objects = response.data.result;
+        })
+        .catch(error => {
+          console.error('Error fetching objects:', error);
+        });
+    },
+    addProperty() {
+      this.formData.properties.push({ object: null, property: null });
+    },
+    removeProperty(index) {
+      if (this.formData.properties.length > 1) {
+        this.formData.properties.splice(index, 1);
+      }
+    },
+    submitForm() {
+      // Update hidden input before submit
+      document.getElementById('properties').value = this.propertiesString;
+      
+      // Submit the form
+      const form = this.$el.querySelector('form');
+      const formData = new FormData(form);
+      
+      // Create a temporary form to submit
+      const tempForm = document.createElement('form');
+      tempForm.method = 'POST';
+      tempForm.action = form.action;
+      
+      for (const [key, value] of formData.entries()) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = value;
+        tempForm.appendChild(input);
+      }
+      
+      document.body.appendChild(tempForm);
+      tempForm.submit();
+    }
+  },
+  created() {
+    this.fetchObjects();
+    
+    // Initialize form data from widget_edit if editing
+    if (this.widget_edit) {
+      this.formData.name = this.widget_edit.name || '';
+      this.formData.period = this.widget_edit.period || 24;
+      this.formData.chart_type = this.widget_edit.chart_type || 'line';
+      this.formData.show_legend = this.widget_edit.show_legend !== false;
+      this.formData.show_navigator = this.widget_edit.show_navigator !== false;
+      this.formData.show_range_selector = this.widget_edit.show_range_selector !== false;
+      this.formData.show_context_menu = this.widget_edit.show_context_menu === true;
+      
+      // Parse existing properties
+      if (this.widget_edit.properties && this.widget_edit.properties.length > 0) {
+        this.formData.properties = this.widget_edit.properties.map(prop => {
+          if (prop.includes('.')) {
+            const parts = prop.split('.');
+            return { object: parts[0], property: parts[1] };
+          }
+          return { object: null, property: null };
+        });
+      }
+    }
+  }
+});
+</script>
+{% endblock %}
