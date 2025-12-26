@@ -60,9 +60,27 @@ class HistoryView(BasePlugin):
         properties = widget_config.get('properties', [])
         chart_type = widget_config.get('chart_type', 'line')
         properties_data = {}
+        properties_labels = {}  # Dictionary to store labels (descriptions) for each property
         
         for prop_name in properties:
             try:
+                # Get object and property descriptions
+                if '.' in prop_name:
+                    object_name, property_name = prop_name.split('.', 1)
+                    obj = objects_storage.getObjectByName(object_name)
+                    if obj:
+                        object_desc = obj.description or object_name
+                        if property_name in obj.properties:
+                            prop_desc = obj.properties[property_name].description or property_name
+                            # Format: "Object Description - Property Description"
+                            properties_labels[prop_name] = f"{object_desc} - {prop_desc}"
+                        else:
+                            properties_labels[prop_name] = f"{object_desc} - {property_name}"
+                    else:
+                        properties_labels[prop_name] = prop_name
+                else:
+                    properties_labels[prop_name] = prop_name
+                
                 history_data = getHistory(prop_name, dt_begin, dt_end, None, False)
                 if history_data:
                     if chart_type == 'pie':
@@ -110,10 +128,13 @@ class HistoryView(BasePlugin):
             except Exception as e:
                 self.logger.exception("Error loading history for %s: %s", prop_name, e)
                 properties_data[prop_name] = []
+                if prop_name not in properties_labels:
+                    properties_labels[prop_name] = prop_name
         
         return render_template('widget_history.html', 
                              widget_config=widget_config,
-                             properties_data=properties_data)
+                             properties_data=properties_data,
+                             properties_labels=properties_labels)
 
     def admin(self, request):
         op = request.args.get("op", None)

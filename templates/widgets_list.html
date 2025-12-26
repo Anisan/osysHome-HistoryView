@@ -10,7 +10,9 @@
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="mb-0">{{ _('Widgets') }}</h5>
-      <a href="?op=create_widget" class="btn btn-primary btn-sm">{{ _('Create Widget') }}</a>
+      <a href="?op=create_widget" class="btn btn-primary btn-sm">
+        <i class="fa-solid fa-plus me-2"></i>{{ _('Create Widget') }}
+      </a>
     </div>
     
     {% if widgets %}
@@ -59,9 +61,13 @@
             </td>
             <td>{{ widget.chart_type }}</td>
             <td>
-              <a href="?op=edit_widget&widget_id={{ widget.id }}" class="btn btn-sm btn-primary me-1">{{ _('Edit') }}</a>
+              <a href="?op=edit_widget&widget_id={{ widget.id }}" class="btn btn-sm btn-primary me-1">
+                <i class="fa-solid fa-pencil me-1"></i>{{ _('Edit') }}
+              </a>
               <a href="?op=delete_widget&widget_id={{ widget.id }}" class="btn btn-sm btn-danger" 
-                 onclick="return confirm('{{ _('Are you sure?') }}')">{{ _('Delete') }}</a>
+                 onclick="return confirm('{{ _('Are you sure?') }}')">
+                <i class="fa-solid fa-trash me-1"></i>{{ _('Delete') }}
+              </a>
             </td>
           </tr>
           {% endfor %}
@@ -70,7 +76,9 @@
     </div>
     {% else %}
     <p class="text-muted">{{ _('No widgets created yet.') }}</p>
-    <a href="?op=create_widget" class="btn btn-primary">{{ _('Create First Widget') }}</a>
+    <a href="?op=create_widget" class="btn btn-primary">
+      <i class="fa-solid fa-plus me-2"></i>{{ _('Create First Widget') }}
+    </a>
     {% endif %}
   </div>
 </div>

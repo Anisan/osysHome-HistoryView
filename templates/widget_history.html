@@ -16,6 +16,7 @@
   const chartContainerId = 'chart_' + widgetId;
   const widgetConfig = {{ widget_config | tojson }};
   const propertiesData = {{ properties_data | tojson }};
+  const propertiesLabels = {{ properties_labels | tojson }};
   
   // Get Bootstrap colors
   function getBootstrapColors() {
@@ -158,9 +159,11 @@
       const pieData = [];
       for (const [propName, data] of Object.entries(propertiesData)) {
         if (data && data.length > 0) {
+          // Get label for this property (description)
+          const propLabel = propertiesLabels[propName] || propName;
           // Data format: [['Value1', count1], ['Value2', count2], ...]
           pieData.push(...data.map(item => ({
-            name: item[0] + ' (' + propName + ')',
+            name: item[0] + ' (' + propLabel + ')',
             y: item[1]
           })));
         }
@@ -218,8 +221,10 @@
     // Prepare series data
     for (const [propName, data] of Object.entries(propertiesData)) {
       if (data && data.length > 0) {
+        // Get label for this property (description)
+        const propLabel = propertiesLabels[propName] || propName;
         series.push({
-          name: propName,
+          name: propLabel,
           data: data,
           type: chartType
         });
