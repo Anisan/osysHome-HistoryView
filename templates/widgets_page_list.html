@@ -1,0 +1,70 @@
+{% extends "layouts/base-fullscreen.html" %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">{{ _('History Widgets') }}</h3>
+    <a class="btn btn-secondary btn-sm" href="/admin/HistoryView">
+      <i class="fa-solid fa-cog me-1"></i>{{ _('Manage Widgets') }}
+    </a>
+  </div>
+
+  {% if widgets %}
+  <div class="row g-3">
+    {% for widget in widgets %}
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">{{ widget.name }}</h5>
+          <p class="card-text">
+            <small class="text-muted">
+              <strong>{{ _('Chart Type') }}:</strong> {{ widget.chart_type }}<br>
+              <strong>{{ _('Period') }}:</strong>
+              {% if widget.period == -1 %}
+                {{ _('All') }}
+              {% elif widget.period == 1 %}
+                1 {{ _('hour') }}
+              {% elif widget.period < 24 %}
+                {{ widget.period }} {{ _('hours') }}
+              {% elif widget.period == 24 %}
+                {{ _('Day') }}
+              {% elif widget.period == 168 %}
+                {{ _('Week') }}
+              {% elif widget.period == 336 %}
+                2 {{ _('weeks') }}
+              {% elif widget.period == 720 %}
+                {{ _('Month') }}
+              {% elif widget.period == 2160 %}
+                3 {{ _('months') }}
+              {% elif widget.period == 4320 %}
+                6 {{ _('months') }}
+              {% elif widget.period == 8640 %}
+                {{ _('Year') }}
+              {% endif %}
+            </small>
+          </p>
+          {% if widget.properties %}
+          <div class="mb-2">
+            {% for prop in widget.properties %}
+              <span class="badge bg-secondary me-1">{{ prop }}</span>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        <div class="card-footer bg-transparent">
+          <a href="/page/HistoryView?widget_id={{ widget.id }}" class="btn btn-primary w-100">
+            <i class="fa-solid fa-chart-line me-1"></i>{{ _('View Chart') }}
+          </a>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    <i class="fa-solid fa-info-circle me-2"></i>{{ _('No widgets created yet.') }}
+    <a href="/admin/HistoryView?op=create_widget" class="alert-link">{{ _('Create your first widget') }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+

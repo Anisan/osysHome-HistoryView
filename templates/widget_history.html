@@ -117,6 +117,7 @@
   }
   
   // Calculate chart height based on widget container
+  let lastCalculatedHeight = null;
   function calculateChartHeight() {
     const widgetContainer = document.getElementById('widget_history_' + widgetId);
     const chartContainer = document.getElementById(chartContainerId);
@@ -125,7 +126,24 @@
       return 300; // default fallback
     }
     
-    // Get the parent widget card
+    // Check if we're on a fullscreen page (widget_page.html)
+    const isFullscreenPage = widgetContainer.closest('.container-fluid') !== null;
+    
+    if (isFullscreenPage) {
+      // For fullscreen page, use viewport height minus header
+      const viewportHeight = window.innerHeight;
+      const headerHeight = 100; // Approximate header + padding
+      const calculatedHeight = Math.max(400, viewportHeight - headerHeight);
+      
+      // Prevent infinite loop: only update if height changed significantly
+      if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
+        lastCalculatedHeight = calculatedHeight;
+        return calculatedHeight;
+      }
+      return lastCalculatedHeight;
+    }
+    
+    // For widget mode (in dashboard), use container-based calculation
     let widgetCard = widgetContainer.closest('.card');
     if (!widgetCard) {
       widgetCard = widgetContainer.closest('.widget-card');
@@ -135,15 +153,31 @@
     }
     
     if (widgetCard) {
-      const cardHeight = widgetCard.offsetHeight || widgetCard.clientHeight;
-      const padding = 20; // padding for widget
+      // Use getBoundingClientRect for more accurate measurement
+      const cardRect = widgetCard.getBoundingClientRect();
+      const cardHeight = cardRect.height;
+      const padding = 40; // padding for widget (card-body padding)
       const calculatedHeight = Math.max(200, cardHeight - padding);
-      return calculatedHeight;
+      
+      // Prevent infinite loop: only update if height changed significantly
+      if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
+        lastCalculatedHeight = calculatedHeight;
+        return calculatedHeight;
+      }
+      return lastCalculatedHeight;
     }
     
     // Fallback: use container's available height
-    const containerHeight = chartContainer.parentElement.offsetHeight || chartContainer.parentElement.clientHeight;
-    return Math.max(200, containerHeight - 50);
+    const containerRect = chartContainer.parentElement.getBoundingClientRect();
+    const containerHeight = containerRect.height;
+    const calculatedHeight = Math.max(200, containerHeight - 50);
+    
+    // Prevent infinite loop
+    if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
+      lastCalculatedHeight = calculatedHeight;
+      return calculatedHeight;
+    }
+    return lastCalculatedHeight;
   }
   
   // Create chart
@@ -303,13 +337,27 @@
     return chart;
   }
   
-  // Handle resize
+  // Handle resize with debounce to prevent infinite loops
+  let resizeTimeout = null;
   function handleResize() {
-    const chart = window['chart_' + widgetId];
-    if (chart) {
-      const newHeight = calculateChartHeight();
-      chart.setSize(null, newHeight, false);
+    // Clear existing timeout
+    if (resizeTimeout) {
+      clearTimeout(resizeTimeout);
     }
+    
+    // Debounce resize handling
+    resizeTimeout = setTimeout(() => {
+      const chart = window['chart_' + widgetId];
+      if (chart) {
+        const newHeight = calculateChartHeight();
+        const currentHeight = chart.chartHeight;
+        
+        // Only update if height changed significantly (more than 5px)
+        if (currentHeight === undefined || Math.abs(newHeight - currentHeight) > 5) {
+          chart.setSize(null, newHeight, false);
+        }
+      }
+    }, 150);
   }
   
   // Initialize chart when DOM is ready
@@ -318,18 +366,26 @@
     setTimeout(() => {
       createChart();
       
-      // Watch for resize events
+      // Watch for resize events - observe window resize instead of container
+      // This prevents infinite loops from ResizeObserver
+      window.addEventListener('resize', handleResize);
+      
+      // Also observe container, but with throttling
       if (window.ResizeObserver) {
         const widgetContainer = document.getElementById('widget_history_' + widgetId);
         if (widgetContainer) {
-          const resizeObserver = new ResizeObserver(() => {
-            handleResize();
+          const resizeObserver = new ResizeObserver((entries) => {
+            // Only trigger if the resize is from window, not from chart itself
+            for (const entry of entries) {
+              const { width, height } = entry.contentRect;
+              // Check if resize is significant (more than 10px change)
+              if (lastCalculatedHeight === null || Math.abs(height - lastCalculatedHeight) > 10) {
+                handleResize();
+              }
+            }
           });
           resizeObserver.observe(widgetContainer);
         }
-      } else {
-        // Fallback for browsers without ResizeObserver
-        window.addEventListener('resize', handleResize);
       }
     }, 100);
   }

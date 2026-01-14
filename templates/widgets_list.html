@@ -61,6 +61,9 @@
             </td>
             <td>{{ widget.chart_type }}</td>
             <td>
+              <a href="/page/HistoryView?widget_id={{ widget.id }}" class="btn btn-sm btn-success me-1" target="_blank" rel="noopener">
+                <i class="fa-solid fa-chart-line me-1"></i>{{ _('Open') }}
+              </a>
               <a href="?op=edit_widget&widget_id={{ widget.id }}" class="btn btn-sm btn-primary me-1">
                 <i class="fa-solid fa-pencil me-1"></i>{{ _('Edit') }}
               </a>
