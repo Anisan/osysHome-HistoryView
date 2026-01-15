@@ -4,8 +4,8 @@
 <script src="/HistoryView/static/highcharts/export-data.js"></script>
 <script src="/HistoryView/static/highcharts/accessibility.js"></script>
 
-<div id="widget_history_{{ widget_config.id }}" style="position: relative; height: 100%; display: flex; flex-direction: column;">
-  <div id="chart_{{ widget_config.id }}" style="flex: 1; min-height: 0; width: 100%;"></div>
+<div id="widget_history_{{ widget_config.id }}" style="position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
+  <div id="chart_{{ widget_config.id }}" style="flex: 1; min-height: 0; width: 100%; overflow: hidden;"></div>
 </div>
 
 <script>
@@ -127,13 +127,17 @@
     }
     
     // Check if we're on a fullscreen page (widget_page.html)
-    const isFullscreenPage = widgetContainer.closest('.container-fluid') !== null;
+    // More reliable detection: check for container-fluid parent and card-body with flex-grow
+    const containerFluid = widgetContainer.closest('.container-fluid');
+    const cardBody = widgetContainer.closest('.card-body.flex-grow-1');
+    const isFullscreenPage = containerFluid !== null && cardBody !== null;
     
     if (isFullscreenPage) {
-      // For fullscreen page, use viewport height minus header
+      // For fullscreen page, use viewport height minus header and margins
       const viewportHeight = window.innerHeight;
       const headerHeight = 100; // Approximate header + padding
-      const calculatedHeight = Math.max(400, viewportHeight - headerHeight);
+      const margins = 40; // Top and bottom margins
+      const calculatedHeight = Math.max(400, viewportHeight - headerHeight - margins);
       
       // Prevent infinite loop: only update if height changed significantly
       if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
@@ -144,6 +148,7 @@
     }
     
     // For widget mode (in dashboard), use container-based calculation
+    // Find the card container that wraps the widget
     let widgetCard = widgetContainer.closest('.card');
     if (!widgetCard) {
       widgetCard = widgetContainer.closest('.widget-card');
@@ -153,11 +158,21 @@
     }
     
     if (widgetCard) {
-      // Use getBoundingClientRect for more accurate measurement
+      // Prefer actual widget container height to avoid unused strips
+      const widgetHeight = widgetContainer.clientHeight || widgetContainer.getBoundingClientRect().height;
+      if (widgetHeight > 0) {
+        const calculatedHeight = Math.max(200, widgetHeight - 4);
+        if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
+          lastCalculatedHeight = calculatedHeight;
+          return calculatedHeight;
+        }
+        return lastCalculatedHeight;
+      }
+
+      // Fallback to card height when widget container size is not available
       const cardRect = widgetCard.getBoundingClientRect();
-      const cardHeight = cardRect.height;
-      const padding = 40; // padding for widget (card-body padding)
-      const calculatedHeight = Math.max(200, cardHeight - padding);
+      const cardPadding = 16; // p-2 class = 0.5rem * 2 = 16px total vertical padding
+      const calculatedHeight = Math.max(200, cardRect.height - cardPadding);
       
       // Prevent infinite loop: only update if height changed significantly
       if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
@@ -167,10 +182,10 @@
       return lastCalculatedHeight;
     }
     
-    // Fallback: use container's available height
-    const containerRect = chartContainer.parentElement.getBoundingClientRect();
-    const containerHeight = containerRect.height;
-    const calculatedHeight = Math.max(200, containerHeight - 50);
+    // Fallback: use widget container's available height directly
+    const widgetRect = widgetContainer.getBoundingClientRect();
+    const containerHeight = widgetRect.height;
+    const calculatedHeight = Math.max(200, containerHeight - 20);
     
     // Prevent infinite loop
     if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
@@ -186,6 +201,23 @@
     
     const colors = getBootstrapColors();
     const chartType = widgetConfig.chart_type || 'line';
+    const renderChartType = chartType === 'step' ? 'line' : chartType;
+    const seriesStep = chartType === 'step' ? 'left' : undefined;
+    
+    const getSeriesType = (type) => (type === 'step' ? 'line' : type);
+    const getSeriesStep = (type) => (type === 'step' ? 'left' : undefined);
+    
+    const propertiesMetaMap = {};
+    if (Array.isArray(widgetConfig.properties)) {
+      widgetConfig.properties.forEach((entry) => {
+        if (entry && typeof entry === 'object') {
+          const name = entry.name || (entry.object && entry.property ? entry.object + '.' + entry.property : null);
+          if (name) {
+            propertiesMetaMap[name] = entry;
+          }
+        }
+      });
+    }
     
     // Check if pie chart
     if (chartType === 'pie') {
@@ -211,14 +243,35 @@
       
       const chartHeight = calculateChartHeight();
       
+      // Ensure chart container has proper constraints
+      const chartContainer = document.getElementById(chartContainerId);
+      if (chartContainer) {
+        chartContainer.style.maxHeight = chartHeight + 'px';
+        chartContainer.style.height = chartHeight + 'px';
+        chartContainer.style.overflow = 'hidden';
+      }
+      
+      // Check if we're in widget mode (not fullscreen page)
+      const widgetContainer = document.getElementById('widget_history_' + widgetId);
+      const isWidgetMode = widgetContainer && widgetContainer.closest('.container-fluid') === null;
+      
       const chartOptions = {
         chart: {
           renderTo: chartContainerId,
           type: 'pie',
-          height: chartHeight
+          height: chartHeight,
+          spacingTop: isWidgetMode ? 4 : 10,
+          spacingRight: 10,
+          spacingBottom: isWidgetMode ? 0 : 10,
+          spacingLeft: 10
         },
         title: {
-          text: '{{ widget_config.name }}'
+          text: '{{ widget_config.name }}',
+          // In widget mode, make title smaller and more compact
+          style: {
+            fontSize: isWidgetMode ? '12px' : '16px'
+          },
+          margin: isWidgetMode ? 3 : 15
         },
         plotOptions: {
           pie: {
@@ -249,7 +302,7 @@
       return chart;
     }
     
-    // For other chart types (line, column, spline, area)
+    // For other chart types (line, column, spline, area, step)
     const series = [];
     
     // Prepare series data
@@ -257,10 +310,18 @@
       if (data && data.length > 0) {
         // Get label for this property (description)
         const propLabel = propertiesLabels[propName] || propName;
+        const meta = propertiesMetaMap[propName] || {};
+        const resolvedType = meta.chart_type || chartType;
+        const resolvedRenderType = getSeriesType(resolvedType);
+        const resolvedStep = getSeriesStep(resolvedType) || (resolvedType === chartType ? seriesStep : undefined);
+        const resolvedColor = meta.color ? String(meta.color).trim() : '';
+        
         series.push({
           name: propLabel,
           data: data,
-          type: chartType
+          type: resolvedRenderType,
+          step: resolvedStep,
+          color: resolvedColor || undefined
         });
       }
     }
@@ -274,18 +335,39 @@
     
     const chartHeight = calculateChartHeight();
     
+    // Ensure chart container has proper constraints
+    const chartContainer = document.getElementById(chartContainerId);
+    if (chartContainer) {
+      chartContainer.style.maxHeight = chartHeight + 'px';
+        chartContainer.style.height = chartHeight + 'px';
+      chartContainer.style.overflow = 'hidden';
+    }
+    
+    // Check if we're in widget mode (not fullscreen page)
+    const widgetContainer = document.getElementById('widget_history_' + widgetId);
+    const isWidgetMode = widgetContainer && widgetContainer.closest('.container-fluid') === null;
+    
     const chartOptions = {
       chart: {
         renderTo: chartContainerId,
-        type: chartType,
+        type: renderChartType,
         height: chartHeight,
         zooming: {
           type: 'x'
         },
-        resetZoomButton: true
+        resetZoomButton: true,
+        spacingTop: isWidgetMode ? 4 : 10,
+        spacingRight: 10,
+        spacingBottom: isWidgetMode ? 0 : 10,
+        spacingLeft: 10
       },
       title: {
-        text: '{{ widget_config.name }}'
+        text: '{{ widget_config.name }}',
+        // In widget mode, make title smaller and more compact
+        style: {
+          fontSize: isWidgetMode ? '12px' : '16px'
+        },
+        margin: isWidgetMode ? 3 : 15
       },
       xAxis: {
         type: 'datetime',
@@ -297,17 +379,23 @@
         }
       },
       legend: {
-        enabled: widgetConfig.show_legend !== false
+        enabled: widgetConfig.show_legend !== false,
+        // In widget mode, make legend more compact
+        layout: isWidgetMode ? 'horizontal' : 'horizontal',
+        align: 'center',
+        verticalAlign: isWidgetMode ? 'bottom' : 'bottom',
+        itemMarginBottom: isWidgetMode ? 2 : 5
       },
       navigator: {
-        enabled: widgetConfig.show_navigator !== false,
+        enabled: widgetConfig.show_navigator !== false && !isWidgetMode,
+        height: isWidgetMode ? 0 : 40,
         series: {
           color: colors.primary,
           lineColor: colors.primary
         }
       },
       rangeSelector: {
-        enabled: widgetConfig.show_range_selector !== false,
+        enabled: widgetConfig.show_range_selector !== false && !isWidgetMode,
         buttons: [
           { type: 'hour', count: 1, text: '1h' },
           { type: 'hour', count: 6, text: '6h' },
@@ -348,9 +436,14 @@
     // Debounce resize handling
     resizeTimeout = setTimeout(() => {
       const chart = window['chart_' + widgetId];
-      if (chart) {
+      const chartContainer = document.getElementById(chartContainerId);
+      if (chart && chartContainer) {
         const newHeight = calculateChartHeight();
         const currentHeight = chart.chartHeight;
+        
+        // Update container maxHeight
+        chartContainer.style.maxHeight = newHeight + 'px';
+        chartContainer.style.height = newHeight + 'px';
         
         // Only update if height changed significantly (more than 5px)
         if (currentHeight === undefined || Math.abs(newHeight - currentHeight) > 5) {

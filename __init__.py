@@ -1,4 +1,5 @@
 from flask import render_template, redirect, request as flask_request
+import json
 from app.core.main.BasePlugin import BasePlugin
 from app.database import session_scope
 from app.core.models.Clasess import Object, History
@@ -51,10 +52,23 @@ class HistoryView(BasePlugin):
             dt_begin = dt_end - datetime.timedelta(hours=period)
 
         # Get properties data
-        properties = widget_config.get('properties', [])
+        raw_properties = widget_config.get('properties', [])
         chart_type = widget_config.get('chart_type', 'line')
         properties_data = {}
         properties_labels = {}  # Dictionary to store labels (descriptions) for each property
+        properties = []
+
+        # Normalize properties list (support legacy string list and new dict list)
+        for prop in raw_properties:
+            prop_name = None
+            if isinstance(prop, str):
+                prop_name = prop
+            elif isinstance(prop, dict):
+                prop_name = prop.get('name')
+                if not prop_name and prop.get('object') and prop.get('property'):
+                    prop_name = f"{prop.get('object')}.{prop.get('property')}"
+            if prop_name:
+                properties.append(prop_name)
 
         for prop_name in properties:
             try:
@@ -245,14 +259,32 @@ class HistoryView(BasePlugin):
                 widget_name = flask_request.form.get('widget_name', '').strip()
                 period = int(flask_request.form.get('period', 24))
                 properties_str = flask_request.form.get('properties', '')
+                properties_json = flask_request.form.get('properties_json', '')
                 chart_type = flask_request.form.get('chart_type', 'line')
                 show_legend = flask_request.form.get('show_legend') == 'on'
                 show_navigator = flask_request.form.get('show_navigator') == 'on'
                 show_range_selector = flask_request.form.get('show_range_selector') == 'on'
                 show_context_menu = flask_request.form.get('show_context_menu') == 'on'
 
-                # Parse properties (comma-separated)
-                properties = [p.strip() for p in properties_str.split(',') if p.strip()]
+                # Parse properties (prefer JSON payload with per-series settings)
+                properties = []
+                if properties_json:
+                    try:
+                        parsed = json.loads(properties_json)
+                        if isinstance(parsed, list):
+                            for item in parsed:
+                                if isinstance(item, dict) and item.get('name'):
+                                    properties.append({
+                                        'name': item.get('name'),
+                                        'chart_type': item.get('chart_type') or None,
+                                        'color': item.get('color') or None
+                                    })
+                    except json.JSONDecodeError:
+                        properties = []
+
+                # Fallback to comma-separated list
+                if not properties:
+                    properties = [p.strip() for p in properties_str.split(',') if p.strip()]
 
                 widgets_list = self.config.get('widgets', [])
 

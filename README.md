@@ -12,7 +12,7 @@ The `HistoryView` module provides history visualization capabilities for the osy
 
 - ✅ **History Viewing**: View property history for objects
 - ✅ **Chart Widgets**: Create customizable chart widgets
-- ✅ **Chart Types**: Line charts, pie charts
+- ✅ **Chart Types**: Line, column, spline, area, step, pie
 - ✅ **Multiple Properties**: Display multiple properties in one widget
 - ✅ **Time Periods**: Configurable time periods (hours)
 - ✅ **Widget Management**: Create, edit, delete widgets
@@ -32,13 +32,15 @@ The module provides a comprehensive admin interface:
 ### Widget Configuration
 - **Widget Name**: Display name
 - **Time Period**: Hours to display (0 for all)
-- **Properties**: Comma-separated list of properties (Object.Property)
-- **Chart Type**: Line or pie chart
+- **Properties**: Select linked properties (Object.Property)
+- **Series Type**: Optional per-property type override (fallback to widget type)
+- **Series Color**: Optional per-property color override (resettable)
+- **Chart Type**: Line, column, spline, area, step, pie
 - **Chart Options**: Legend, navigator, range selector, context menu
 
 ## Widget Types
 
-### Line Chart
+### Line/Column/Spline/Area/Step Charts
 - Time series visualization
 - Multiple properties support
 - Interactive zoom and pan
@@ -58,9 +60,10 @@ The module provides a comprehensive admin interface:
 3. Enter widget name
 4. Set time period
 5. Add properties (Object.Property format)
-6. Select chart type
-7. Configure chart options
-8. Save widget
+6. (Optional) Set per-property series type and color
+7. Select chart type (used when per-property type is not set)
+8. Configure chart options
+9. Save widget
 
 ### Viewing History
 

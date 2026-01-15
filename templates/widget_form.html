@@ -45,7 +45,7 @@
             <div class="card">
               <div class="card-body">
                 <div class="row g-2 align-items-end">
-                  <div class="col-md-5">
+                  <div class="col-lg-4">
                     <label class="form-label small">{{ _('Linked object') }}</label>
                     <select-with-filter 
                       placeholder="{{ _('Select object') }}" 
@@ -54,7 +54,7 @@
                       @changed="property.property = null">
                     </select-with-filter>
                   </div>
-                  <div class="col-md-5" v-if="property.object && property.object in objects">
+                  <div class="col-lg-4" v-if="property.object && property.object in objects">
                     <label class="form-label small">{{ _('Linked property') }}</label>
                     <select-with-filter 
                       placeholder="{{ _('Select property') }}" 
@@ -62,11 +62,32 @@
                       v-model="property.property">
                     </select-with-filter>
                   </div>
-                  <div class="col-md-2 text-end">
+                  <div class="col-lg-2">
+                    <label class="form-label small">{{ _('Series Type') }}</label>
+                    <select class="form-select" v-model="property.chart_type">
+                      <option value="">{{ _('Use widget type') }}</option>
+                      <option value="line">{{ _('Line') }}</option>
+                      <option value="column">{{ _('Column') }}</option>
+                      <option value="spline">{{ _('Spline') }}</option>
+                      <option value="area">{{ _('Area') }}</option>
+                      <option value="step">{{ _('Step') }}</option>
+                    </select>
+                  </div>
+                  <div class="col-lg-2">
+                    <label class="form-label small">{{ _('Color') }}</label>
+                    <div class="d-flex gap-2 align-items-center">
+                      <input type="color" class="form-control form-control-color" v-model="property.color">
+                      <button type="button" class="btn btn-outline-secondary btn-sm"
+                              @click="property.color = ''"
+                              :title="'{{ _('Reset color') }}'">
+                        <i class="fa-solid fa-rotate-left"></i>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="col-12 text-end">
                     <button type="button" class="btn btn-sm btn-danger" 
                             @click="removeProperty(index)" 
-                            v-if="formData.properties.length > 1"
-                            style="margin-top: 1.5rem;">
+                            v-if="formData.properties.length > 1">
                       <i class="fa-solid fa-trash"></i> {{ _('Remove') }}
                     </button>
                   </div>
@@ -80,6 +101,7 @@
             </button>
           </div>
           <input type="hidden" id="properties" name="properties" :value="propertiesString">
+          <input type="hidden" id="properties_json" name="properties_json" :value="propertiesJson">
         </div>
         
         <div class="mb-3">
@@ -89,6 +111,7 @@
             <option value="column">{{ _('Column') }}</option>
             <option value="spline">{{ _('Spline') }}</option>
             <option value="area">{{ _('Area') }}</option>
+            <option value="step">{{ _('Step') }}</option>
             <option value="pie">{{ _('Pie') }}</option>
           </select>
         </div>
@@ -159,7 +182,7 @@ new Vue({
       show_range_selector: true,
       show_context_menu: false,
       properties: [
-        { object: null, property: null }
+        { object: null, property: null, chart_type: '', color: '' }
       ]
     }
   },
@@ -176,6 +199,17 @@ new Vue({
         .filter(p => p.object && p.property)
         .map(p => p.object + '.' + p.property)
         .join(',');
+    },
+    propertiesJson() {
+      return JSON.stringify(
+        this.formData.properties
+          .filter(p => p.object && p.property)
+          .map(p => ({
+            name: p.object + '.' + p.property,
+            chart_type: p.chart_type || null,
+            color: p.color || null
+          }))
+      );
     }
   },
   methods: {
@@ -189,7 +223,7 @@ new Vue({
         });
     },
     addProperty() {
-      this.formData.properties.push({ object: null, property: null });
+      this.formData.properties.push({ object: null, property: null, chart_type: '', color: '' });
     },
     removeProperty(index) {
       if (this.formData.properties.length > 1) {
@@ -237,11 +271,23 @@ new Vue({
       // Parse existing properties
       if (this.widget_edit.properties && this.widget_edit.properties.length > 0) {
         this.formData.properties = this.widget_edit.properties.map(prop => {
-          if (prop.includes('.')) {
+          if (typeof prop === 'string' && prop.includes('.')) {
             const parts = prop.split('.');
-            return { object: parts[0], property: parts[1] };
+            return { object: parts[0], property: parts[1], chart_type: '', color: '' };
           }
-          return { object: null, property: null };
+          if (typeof prop === 'object' && prop !== null) {
+            const name = prop.name || (prop.object && prop.property ? prop.object + '.' + prop.property : '');
+            if (name.includes('.')) {
+              const parts = name.split('.');
+              return {
+                object: parts[0],
+                property: parts[1],
+                chart_type: prop.chart_type || '',
+                color: prop.color || ''
+              };
+            }
+          }
+          return { object: null, property: null, chart_type: '', color: '' };
         });
       }
     }

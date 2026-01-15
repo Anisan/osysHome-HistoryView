@@ -45,7 +45,12 @@
           {% if widget.properties %}
           <div class="mb-2">
             {% for prop in widget.properties %}
-              <span class="badge bg-secondary me-1">{{ prop }}</span>
+              {% if prop is mapping %}
+                {% set prop_name = prop.name if prop.name else (prop.object ~ '.' ~ prop.property) %}
+              {% else %}
+                {% set prop_name = prop %}
+              {% endif %}
+              <span class="badge bg-secondary me-1">{{ prop_name }}</span>
             {% endfor %}
           </div>
           {% endif %}

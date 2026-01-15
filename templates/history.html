@@ -130,6 +130,7 @@
             {"title":"{{ _('Column') }}", "value": 'column'},
             {"title":"{{ _('Spline') }}", "value": 'spline'},
             {"title":"{{ _('Area') }}", "value": 'area'},
+            {"title":"{{ _('Step') }}", "value": 'step'},
           ]
         };
       },
@@ -648,7 +649,7 @@
              existingChart.destroy();
            }
            
-           if (this.chartType=='line')
+          if (this.chartType=='line')
              this.linePreset()
            else if (this.chartType=='column')
              this.linePreset()
@@ -656,6 +657,8 @@
              this.linePreset()
            else if (this.chartType=='area')
              this.linePreset()
+          else if (this.chartType=='step')
+            this.linePreset()
          },
         linePreset(){
           // Create a timer
@@ -680,7 +683,7 @@
                         }
                       }
                   },
-                  type: this.chartType,
+                  type: this.chartType === 'step' ? 'line' : this.chartType,
                   zooming: {
                     type: 'x'
                   },
@@ -713,7 +716,7 @@
                 yAxis: { title: { text: "{{ _('Value')}}" } },
                 series: [{
                   name: this.property_name+"("+this.info.description+")",
-                  step: this.step,
+                  step: this.chartType === 'step' ? 'left' : this.step,
                   turboThreshold: 0, // Отключаем оптимизацию для точек
                   data: this.values.sort(function(x, y) {
                     if (x[0] === y[0]) {
