@@ -204,7 +204,7 @@ class HistoryView(BasePlugin):
             # Search by object.property in properties
             matched_properties = []
             for prop in properties:
-                if query_lower in prop.lower():
+                if query_lower in json.dumps(prop).lower():
                     matched_properties.append(prop)
 
             if matched_properties:
