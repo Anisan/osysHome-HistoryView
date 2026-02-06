@@ -13,6 +13,11 @@
   <script src="/HistoryView/static/highcharts/export-data.js"></script>
   <script src="/HistoryView/static/highcharts/accessibility.js"></script>
   
+  <style>
+    main[role="main"] {
+      min-width: 0;
+    }
+  </style>
   <div id="history_app">
     <h3>{{ _('History')}} <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
     <small>{{ _('Description')}}: [[info.object_description ?? "{{ _('No description')}}"]].[[info.description ?? "{{ _('No description')}}"]]</small>
