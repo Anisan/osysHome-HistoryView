@@ -14,9 +14,13 @@
   <script src="/HistoryView/static/highcharts/accessibility.js"></script>
   
   <style>
-    main[role="main"] {
-      min-width: 0;
-    }
+  main[role="main"] {
+    min-width: 0;
+  }
+  th.sortable {
+    cursor: pointer;
+    user-select: none;
+  }
   </style>
   <div id="history_app">
     <h3>{{ _('History')}} <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
@@ -54,12 +58,26 @@
 
       <!-- Вкладка "Таблица" -->
       <div class="tab-pane fad" :class="{ active : !viewCharts}" id="table" role="tabpanel">
+        <div class="row my-2">
+          <div class="col-md-4 ms-auto">
+            <input type="text" class="form-control" v-model="searchQuery" :placeholder="'{{ _('Search')}}'">
+          </div>
+        </div>
         <table class="table table-striped">
           <thead>
             <tr>
-              <th>{{ _('Value')}}</th>
-              <th>{{ _('Changed')}}</th>
-              <th>{{ _('Source')}}</th>
+              <th class="sortable" @click="changeSort('value')">
+                {{ _('Value')}}
+                <span v-if="sortKey === 'value'">[[ sortOrder === 'asc' ? '▲' : '▼' ]]</span>
+              </th>
+              <th class="sortable" @click="changeSort('added')">
+                {{ _('Changed')}}
+                <span v-if="sortKey === 'added'">[[ sortOrder === 'asc' ? '▲' : '▼' ]]</span>
+              </th>
+              <th class="sortable" @click="changeSort('source')">
+                {{ _('Source')}}
+                <span v-if="sortKey === 'source'">[[ sortOrder === 'asc' ? '▲' : '▼' ]]</span>
+              </th>
               <th></th>
             </tr>
           </thead>
@@ -94,6 +112,25 @@
         {{ _('Type')}}: <b>[[info.type ?? '-']]</b><br>
         {{ _('History')}}: <b>[[info.history]]</b><br>
         {{ _('Link')}}: <span class="badge bg-success text-light" v-for="item in info.linked">[[item]]</span><br>
+        <hr>
+        <div v-if="chartData.length">
+          <div>
+            {{ _('Min value')}}:
+            <b v-if="minRecord">[[ minRecord.value ]]</b>
+            <span v-if="minRecord">
+              ({{ _('Changed')}}: [[ formatDate(minRecord.added) ]],
+               {{ _('Source')}}: [[ minRecord.source || 'Unknown' ]])
+            </span>
+          </div>
+          <div class="mt-1">
+            {{ _('Max value')}}:
+            <b v-if="maxRecord">[[ maxRecord.value ]]</b>
+            <span v-if="maxRecord">
+              ({{ _('Changed')}}: [[ formatDate(maxRecord.added) ]],
+               {{ _('Source')}}: [[ maxRecord.source || 'Unknown' ]])
+            </span>
+          </div>
+        </div>
        </div>
     </div>
   </div>
@@ -114,6 +151,9 @@
           step: undefined,
           currentPage: 1, // Текущая страница пагинации
           pageSize: 25, // Количество элементов на странице
+        searchQuery: '', // Строка фильтрации таблицы
+        sortKey: 'added', // Текущий столбец сортировки
+        sortOrder: 'desc', // Порядок сортировки: 'asc' или 'desc'
           period:1,
           periods:[
             {"title":"1 {{ _('hour') }}", "value": 1},
@@ -140,15 +180,71 @@
         };
       },
       computed: {
+        // Отфильтрованные данные для таблицы
+        filteredData() {
+          if (!this.searchQuery) {
+            return this.chartData;
+          }
+          const q = this.searchQuery.toLowerCase();
+          return this.chartData.filter(item => {
+            const valueStr = String(item.value ?? '').toLowerCase();
+            const dateStr = this.formatDate(item.added).toLowerCase();
+            const sourceStr = (item.source || 'Unknown').toLowerCase();
+            return valueStr.includes(q) || dateStr.includes(q) || sourceStr.includes(q);
+          });
+        },
+        // Отфильтрованные и отсортированные данные
+        sortedData() {
+          const data = this.filteredData.slice();
+          const key = this.sortKey;
+          const order = this.sortOrder === 'asc' ? 1 : -1;
+          return data.sort((a, b) => {
+            let aVal = a[key];
+            let bVal = b[key];
+
+            if (key === 'added') {
+              aVal = new Date(aVal);
+              bVal = new Date(bVal);
+            } else if (key === 'value') {
+              aVal = Number(aVal);
+              bVal = Number(bVal);
+            } else {
+              aVal = (aVal ?? '').toString().toLowerCase();
+              bVal = (bVal ?? '').toString().toLowerCase();
+            }
+
+            if (aVal < bVal) return -1 * order;
+            if (aVal > bVal) return 1 * order;
+            return 0;
+          });
+        },
         // Вычисляемые данные для текущей страницы
         paginatedData() {
           const start = (this.currentPage - 1) * this.pageSize;
           const end = start + this.pageSize;
-          return this.chartData.slice(start, end);
+          return this.sortedData.slice(start, end);
         },
         // Общее количество страниц
         totalPages() {
-          return Math.ceil(this.chartData.length / this.pageSize);
+          return Math.max(1, Math.ceil(this.filteredData.length / this.pageSize) || 1);
+        },
+        // Запись с минимальным значением
+        minRecord() {
+          if (!this.chartData.length) return null;
+          return this.chartData.reduce((min, current) => {
+            const minVal = Number(min.value);
+            const curVal = Number(current.value);
+            return curVal < minVal ? current : min;
+          });
+        },
+        // Запись с максимальным значением
+        maxRecord() {
+          if (!this.chartData.length) return null;
+          return this.chartData.reduce((max, current) => {
+            const maxVal = Number(max.value);
+            const curVal = Number(current.value);
+            return curVal > maxVal ? current : max;
+          });
         },
         viewCharts(){
           return this.info.type=='int' || this.info.type=='float' || this.info.type=='bool'
@@ -157,6 +253,9 @@
       watch:{
         period(){
           this.fetchData()
+        },
+        searchQuery() {
+          this.currentPage = 1;
         },
       },
       methods: {
@@ -758,6 +857,16 @@
           if (page >= 1 && page <= this.totalPages) {
             this.currentPage = page;
           }
+        },
+        // Смена столбца и направления сортировки
+        changeSort(column) {
+          if (this.sortKey === column) {
+            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+          } else {
+            this.sortKey = column;
+            this.sortOrder = 'asc';
+          }
+          this.currentPage = 1;
         }
       },
       mounted() {
