@@ -6,7 +6,7 @@
 <script src="{{ config.ASSETS_ROOT }}/plugins/vue/vue@2.js"></script>
 <script src="{{ config.ASSETS_ROOT }}/plugins/vue/axios.min.js"></script>
 
-<div id="widget_form_app">
+<div id="widget_form_app" v-cloak>
   <div class="card mb-3">
     <div class="card-header">
       <h4 class="mb-0">{{ _('Widgets Management') }} - <span v-if="widget_edit">{{ _('Edit Widget') }}</span><span v-else>{{ _('Create Widget') }}</span></h4>
@@ -71,6 +71,20 @@
                       <option value="spline">{{ _('Spline') }}</option>
                       <option value="area">{{ _('Area') }}</option>
                       <option value="step">{{ _('Step') }}</option>
+                      <option value="areaspline">{{ _('Area Spline') }}</option>
+                      <option value="scatter">{{ _('Scatter') }}</option>
+                      <option value="steparea">{{ _('Step Area') }}</option>
+                      <option value="movingavg">{{ _('Moving Average') }}</option>
+                      <option value="delta">{{ _('Delta') }}</option>
+                      <option value="timeline">{{ _('Event Timeline') }}</option>
+                      <option value="stepmarkers">{{ _('Step with Markers') }}</option>
+                      <option value="linearea">{{ _('Line + Area') }}</option>
+                      <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
+                      <option value="histogram">{{ _('Histogram') }}</option>
+                      <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
+                      <option value="waterfall">{{ _('Delta Waterfall') }}</option>
+                      <option value="bullet">{{ _('Current Progress') }}</option>
+                      <option value="radar24">{{ _('Daily Profile') }}</option>
                     </select>
                   </div>
                   <div class="col-lg-2">
@@ -112,6 +126,20 @@
             <option value="spline">{{ _('Spline') }}</option>
             <option value="area">{{ _('Area') }}</option>
             <option value="step">{{ _('Step') }}</option>
+            <option value="areaspline">{{ _('Area Spline') }}</option>
+            <option value="scatter">{{ _('Scatter') }}</option>
+            <option value="steparea">{{ _('Step Area') }}</option>
+            <option value="movingavg">{{ _('Moving Average') }}</option>
+            <option value="delta">{{ _('Delta') }}</option>
+            <option value="timeline">{{ _('Event Timeline') }}</option>
+            <option value="stepmarkers">{{ _('Step with Markers') }}</option>
+            <option value="linearea">{{ _('Line + Area') }}</option>
+            <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
+            <option value="histogram">{{ _('Histogram') }}</option>
+            <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
+            <option value="waterfall">{{ _('Delta Waterfall') }}</option>
+            <option value="bullet">{{ _('Current Progress') }}</option>
+            <option value="radar24">{{ _('Daily Profile') }}</option>
             <option value="pie">{{ _('Pie') }}</option>
           </select>
         </div>

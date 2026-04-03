@@ -1,125 +1,60 @@
-# HistoryView - History Visualization Module
+# HistoryView
 
-![HistoryView Icon](static/HistoryView.png)
+![HistoryView Icon](static/HistoryView.png "HistoryView plugin")
 
-A history visualization system for viewing object property history with customizable charts and widgets.
+`HistoryView` is the osysHome module for property history exploration, trend analysis, and reusable widget-based history dashboards.
 
-## Description
+## Documentation
 
-The `HistoryView` module provides history visualization capabilities for the osysHome platform. It enables you to view historical data of object properties, create custom widgets with charts, and analyze trends over time.
+- [Module index](docs/index.md)
+- [User Guide](docs/USER_GUIDE.md)
+- [Technical Reference](docs/TECHNICAL_REFERENCE.md)
 
-## Main Features
+## What Is Covered In v2.0
 
-- ✅ **History Viewing**: View property history for objects
-- ✅ **Chart Widgets**: Create customizable chart widgets
-- ✅ **Chart Types**: Line, column, spline, area, step, pie
-- ✅ **Multiple Properties**: Display multiple properties in one widget
-- ✅ **Time Periods**: Configurable time periods (hours)
-- ✅ **Widget Management**: Create, edit, delete widgets
-- ✅ **Fullscreen Widget Pages**: Open widgets in dedicated fullscreen pages
-- ✅ **Widget Search**: Search widgets by name and object properties
-- ✅ **Highcharts Integration**: Professional charting library
+- dedicated property history page with chart, analytics, table, and summary;
+- automatic handling of numeric, boolean, and state-like data;
+- previous-period comparison and CSV export;
+- configurable multi-series widgets with per-series type/color overrides;
+- fullscreen widget pages and global search integration.
 
-## Admin Panel
+## Entry Points
 
-The module provides a comprehensive admin interface:
+```text
+/admin/HistoryView
+/page/HistoryView
+/page/HistoryView?widget_id=<widget-id>
+/HistoryView/api/history_data
+```
 
-### Main View
-- **Widgets List**: View all created widgets
-- **Widget Management**: Create, edit, delete widgets
-- **History View**: View property history for specific objects
+## Admin Operations
 
-### Widget Configuration
-- **Widget Name**: Display name
-- **Time Period**: Hours to display (0 for all)
-- **Properties**: Select linked properties (Object.Property)
-- **Series Type**: Optional per-property type override (fallback to widget type)
-- **Series Color**: Optional per-property color override (resettable)
-- **Chart Type**: Line, column, spline, area, step, pie
-- **Chart Options**: Legend, navigator, range selector, context menu
+`/admin/HistoryView` supports these operation modes:
 
-## Widget Types
+- `op=create_widget`: open empty widget form;
+- `op=edit_widget&widget_id=<id>`: edit widget;
+- `op=save_widget` (`POST`): create/update widget config;
+- `op=delete_widget&widget_id=<id>`: remove widget;
+- `op=delete&id=<history-id>`: delete one history row.
 
-### Line/Column/Spline/Area/Step Charts
-- Time series visualization
-- Multiple properties support
-- Interactive zoom and pan
-- Value tooltips
+## History API Quick Reference
 
-### Pie Chart
-- Value distribution
-- Aggregated data display
-- Percentage display
+Endpoint: `GET /HistoryView/api/history_data`
 
-## Usage
+Required query params:
 
-### Creating a Widget
+- `object`
+- `property`
 
-1. Navigate to HistoryView module
-2. Click "Create Widget"
-3. Enter widget name
-4. Set time period
-5. Add properties (Object.Property format)
-6. (Optional) Set per-property series type and color
-7. Select chart type (used when per-property type is not set)
-8. Configure chart options
-9. Save widget
+Common optional params:
 
-### Viewing History
+- `period` (`1`, `24`, `168`, `720`)
+- `from` and `to` (`YYYY-MM-DD HH:MM`)
+- `bucket` (`auto`, `5m`, `15m`, `1h`, `6h`, `1d`)
+- `include_compare` (`true` or `false`)
 
-1. Navigate to HistoryView module
-2. Select object from list
-3. View property history
-4. Delete history entries if needed
-
-### Viewing Widget Charts
-
-1. Navigate to `/page/HistoryView` to see all widgets
-2. Click on a widget card to open its chart in fullscreen
-3. Use the back button to return to the widgets list
-
-### Searching Widgets
-
-The module supports search functionality:
-- Search by widget name
-- Search by object properties (e.g., "Object.Property")
-- Search results link directly to widget pages
-
-## Technical Details
-
-- **Chart Library**: Highcharts
-- **Data Format**: Timestamp-value pairs
-- **Property Format**: Object.Property
-- **Time Handling**: UTC to local time conversion
-- **Widget Storage**: Configuration stored in module config
+For full payload schema and internal behavior, see [Technical Reference](docs/TECHNICAL_REFERENCE.md#history-api).
 
 ## Version
 
-Current version: **1.2**
-
-## Category
-
-System
-
-## Actions
-
-The module provides the following actions:
-- `widget` - Render history widgets for dashboard
-- `page` - Render fullscreen widget pages (list or individual widget chart)
-- `search` - Search widgets by name and object properties
-
-## Requirements
-
-- Flask
-- SQLAlchemy
-- Highcharts (JavaScript library)
-- osysHome core system
-
-## Author
-
-osysHome Team
-
-## License
-
-See the main osysHome project license
-
+`2.0`

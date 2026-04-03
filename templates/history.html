@@ -1,929 +1,3210 @@
-{% extends "layouts/module_admin.html" %}
+﻿{% extends "layouts/module_admin.html" %}
 {% block breadcrumb %}
 <li class="breadcrumb-item"><a href="HistoryView">{{ _('HistoryView')}}</a></li>
 {% endblock %}
 {% block module %}
-  <!-- Vue 2 -->
-  <script src="{{ config.ASSETS_ROOT }}/plugins/vue/vue@2.js"></script>
-  
-  <!-- Highcharts -->
-  <script src="/HistoryView/static/highcharts/highstock.js"></script>
-  <script src="/HistoryView/static/highcharts/highstock-3d.js"></script>
-  <script src="/HistoryView/static/highcharts/exporting.js"></script>
-  <script src="/HistoryView/static/highcharts/export-data.js"></script>
-  <script src="/HistoryView/static/highcharts/accessibility.js"></script>
-  
-  <style>
-  main[role="main"] {
-    min-width: 0;
+<script src="/HistoryView/static/highcharts/highstock.js"></script>
+<script src="/HistoryView/static/highcharts/highstock-3d.js"></script>
+<script src="/HistoryView/static/highcharts/highcharts-more.js"></script>
+<script src="/HistoryView/static/highcharts/modules/heatmap.js"></script>
+<script src="/HistoryView/static/highcharts/modules/histogram-bellcurve.js"></script>
+<script src="/HistoryView/static/highcharts/modules/bullet.js"></script>
+<script src="/HistoryView/static/highcharts/exporting.js"></script>
+<script src="/HistoryView/static/highcharts/export-data.js"></script>
+<script src="/HistoryView/static/highcharts/accessibility.js"></script>
+
+<style>
+  .history-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: auto;
   }
-  th.sortable {
+  .history-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 0.75rem;
+  }
+  .history-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    padding: 0.9rem 1rem;
+    background: var(--bs-tertiary-bg, var(--bs-body-bg));
+  }
+  .history-card .metric {
+    font-size: 1.35rem;
+    font-weight: 700;
+  }
+  .history-card.is-primary .metric {
+    font-size: 1.6rem;
+  }
+  .history-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+  }
+  .history-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+  }
+  .history-chart {
+    min-height: 260px;
+  }
+  .history-mini-chart {
+    min-height: 320px;
+  }
+  .history-table td,
+  .history-table th {
+    vertical-align: middle;
+  }
+  .history-table th.history-sortable {
     cursor: pointer;
     user-select: none;
+    white-space: nowrap;
   }
-  </style>
-  <div id="history_app">
-    <h3>{{ _('History')}} <a :href="'Objects?view=object&object='+info.object_id+'&tab=properties'">[[object_name]].[[property_name]]</a></h3>
-    <small>{{ _('Description')}}: [[info.object_description ?? "{{ _('No description')}}"]].[[info.description ?? "{{ _('No description')}}"]]</small>
-    <div class="my-2">
-      {{ _('Periods')}}: <div class="btn mx-1" :class="period == item.value ? 'btn-primary':'btn-secondary'" v-for="item in periods" @click="period = item.value">[[item.title]]</div>
-      <span v-if="!loading">{{ _('Count values')}}: [[chartData.length]]</span>
-      <i v-else class="fa-solid fa-spinner fa-spin"></i>
+  .history-table th.history-sortable .sort-indicator {
+    margin-left: 0.35rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.8rem;
+  }
+  .history-table th.history-sortable.is-active .sort-indicator {
+    color: var(--bs-primary);
+  }
+  .history-transition {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.9rem;
+  }
+  .history-muted {
+    color: var(--bs-secondary-color);
+  }
+  .history-periods {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .history-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+  }
+  .history-toolbar-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+  .history-field {
+    min-width: 230px;
+    flex: 0 0 auto;
+  }
+  .history-field .form-control {
+    min-height: 38px;
+  }
+  .history-actions {
+    flex: 0 0 auto;
+    display: flex;
+    gap: 0.5rem;
+  }
+  .history-actions .btn {
+    min-width: 110px;
+    min-height: 38px;
+  }
+  .history-periods .btn {
+    padding-inline: 0.55rem;
+    min-height: 38px;
+  }
+  .history-panel {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    background: var(--bs-tertiary-bg, var(--bs-body-bg));
+  }
+  .history-panel h6 {
+    margin-bottom: 0.9rem;
+    font-weight: 700;
+  }
+  .history-facts {
+    display: grid;
+    gap: 0.55rem;
+  }
+  .history-facts div {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 0.75rem;
+    align-items: start;
+  }
+  .history-facts strong {
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+  }
+  .history-loading {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.95rem;
+  }
+  .history-loading.is-visible {
+    display: inline-flex;
+  }
+  .history-periods .btn.active {
+    color: var(--bs-white);
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+  }
+  .history-metric-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .history-help-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    border: 1px solid var(--bs-secondary-color);
+    color: var(--bs-secondary-color);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
+    user-select: none;
+  }
+  .history-help-icon:hover {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
+  }
+  .history-chart-resize {
+    height: 12px;
+    margin-top: 0.25rem;
+    border-radius: 999px;
+    background:
+      linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 4px,
+        var(--bs-border-color) 4px,
+        var(--bs-border-color) 8px,
+        transparent 8px
+      );
+    cursor: ns-resize;
+    user-select: none;
+    touch-action: none;
+  }
+  .history-chart-resize:hover,
+  .history-chart-resize:focus-visible {
+    background:
+      linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 4px,
+        var(--bs-primary) 4px,
+        var(--bs-primary) 8px,
+        transparent 8px
+      );
+    outline: none;
+  }
+  body.history-resizing {
+    cursor: ns-resize !important;
+  }
+  .history-unavailable {
+    margin-top: 0.75rem;
+  }
+</style>
+
+<div id="history_view_page">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+    <div>
+      <h3 class="mb-1">{{ _('History') }}</h3>
+      <div class="history-muted">
+        <a href="Objects?view=object&object={{ object.id }}&tab=properties">{{ object.name }}.{{ name }}</a>
+      </div>
+      <div class="history-muted" id="propertyDescription"></div>
     </div>
-    <!-- Вкладки -->
-    <ul class="nav nav-tabs" role="tablist">
-      <li v-if="viewCharts" class="nav-item">
-        <a class="nav-link active" data-bs-toggle="tab" href="#charts">{{ _('Graph')}}</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" :class="{ active : !viewCharts}" data-bs-toggle="tab" href="#table">{{ _('Table')}}</a>
-      </li>
-      <li class="nav-item">
-        <a class="nav-link" data-bs-toggle="tab" href="#info">{{ _('Info')}}</a>
-      </li>
-    </ul>
-    <!-- Содержимое вкладок -->
-    <div class="tab-content">
-      <!-- Вкладка "Графики" -->
-      <div v-if="viewCharts" class="tab-pane active" id="charts" role="tabpanel">
-        <div class="input-group my-3">
-          <label class="input-group-text" or="inputGroupSelect01">{{ _('Preset')}}</label>
-          <select class="form-select" id="inputGroupSelect01" v-model="chartType" @change="updateChart">
-            <option v-for="item in chartTypes" :value="item.value">[[item.title]]</option>
-          </select>
-        </div>
-       <div id="lineChart" style="min-width: 310px; height: 500px; margin: 0 auto;"></div>
-       <div id="pieChart" style="min-width: 310px; height: 400px; margin: 0 auto;"></div>
-      </div>
-
-      <!-- Вкладка "Таблица" -->
-      <div class="tab-pane fad" :class="{ active : !viewCharts}" id="table" role="tabpanel">
-        <div class="row my-2">
-          <div class="col-md-4 ms-auto">
-            <input type="text" class="form-control" v-model="searchQuery" :placeholder="'{{ _('Search')}}'">
-          </div>
-        </div>
-        <table class="table table-striped">
-          <thead>
-            <tr>
-              <th class="sortable" @click="changeSort('value')">
-                {{ _('Value')}}
-                <span v-if="sortKey === 'value'">[[ sortOrder === 'asc' ? '▲' : '▼' ]]</span>
-              </th>
-              <th class="sortable" @click="changeSort('added')">
-                {{ _('Changed')}}
-                <span v-if="sortKey === 'added'">[[ sortOrder === 'asc' ? '▲' : '▼' ]]</span>
-              </th>
-              <th class="sortable" @click="changeSort('source')">
-                {{ _('Source')}}
-                <span v-if="sortKey === 'source'">[[ sortOrder === 'asc' ? '▲' : '▼' ]]</span>
-              </th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(item, index) in paginatedData" :key="item.id">
-              <td>[[ item.value ]]</td>
-              <td>[[ formatDate(item.added) ]]</td>
-              <td>[[ item.source || 'Unknown' ]]</td>
-              <td><a :href="'?op=delete&id='+item.id+'&object={{object.id}}&name={{name}}'" onClick="return confirm('Are you sure? Please confirm.')" class="btn btn-sm btn-danger" title="{{ _('Delete')}}"><i class="feather icon-trash"></i></a></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- Пагинация -->
-        <nav aria-label="Page navigation" class="mt-4">
-          <ul class="pagination justify-content-center">
-            <li class="page-item" :class="{ disabled: currentPage === 1 }">
-              <a class="page-link" href="#" @click="prevPage">{{ _('Prev')}}</a>
-            </li>
-            <li v-for="(page,index) in totalPages" :key="page" class="page-item" :class="{ active: page === currentPage }">
-              <a class="page-link" href="#" @click="goToPage(page)">[[page]]</a>
-            </li>
-            <li class="page-item" :class="{ disabled: currentPage === totalPages }">
-              <a class="page-link" href="#" @click="nextPage">{{ _('Next')}}</a>
-            </li>
-          </ul>
-        </nav>
-      </div>
-      <div class="tab-pane p-3" id="info" role="tabpanel">
-        {{ _('Name')}}: <b>[[info.name]]</b><br>
-        {{ _('Description')}}: <b>[[info.description ?? '-']]</b><br>
-        {{ _('Type')}}: <b>[[info.type ?? '-']]</b><br>
-        {{ _('History')}}: <b>[[info.history]]</b><br>
-        {{ _('Link')}}: <span class="badge bg-success text-light" v-for="item in info.linked">[[item]]</span><br>
-        <hr>
-        <div v-if="chartData.length">
-          <div>
-            {{ _('Min value')}}:
-            <b v-if="minRecord">[[ minRecord.value ]]</b>
-            <span v-if="minRecord">
-              ({{ _('Changed')}}: [[ formatDate(minRecord.added) ]],
-               {{ _('Source')}}: [[ minRecord.source || 'Unknown' ]])
-            </span>
-          </div>
-          <div class="mt-1">
-            {{ _('Max value')}}:
-            <b v-if="maxRecord">[[ maxRecord.value ]]</b>
-            <span v-if="maxRecord">
-              ({{ _('Changed')}}: [[ formatDate(maxRecord.added) ]],
-               {{ _('Source')}}: [[ maxRecord.source || 'Unknown' ]])
-            </span>
-          </div>
-        </div>
-       </div>
+    <div class="history-loading" id="historyLoading">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>{{ _('Loading history') }}</span>
     </div>
   </div>
 
-  <script>
-    new Vue({
-      el: '#history_app',
-      delimiters: ['[[', ']]'], // Измененные разделители
-      data() {
-        return {
-          loading: true,
-          info:{},
-          object_name: "{{object.name}}",
-          property_name: "{{name}}",
-          chartData: [],
-          values:[],
-          sourceCounts: {},
-          step: undefined,
-          currentPage: 1, // Текущая страница пагинации
-          pageSize: 25, // Количество элементов на странице
-        searchQuery: '', // Строка фильтрации таблицы
-        sortKey: 'added', // Текущий столбец сортировки
-        sortOrder: 'desc', // Порядок сортировки: 'asc' или 'desc'
-          period:1,
-          periods:[
-            {"title":"1 {{ _('hour') }}", "value": 1},
-            {"title":"3 {{ _('hours') }}", "value": 3},
-            {"title":"6 {{ _('hours') }}", "value": 6},
-            {"title":"12 {{ _('hours') }}", "value": 12},
-            {"title":"{{ _('Day') }}", "value": 24},
-            {"title":"{{ _('Week') }}", "value": 168},
-            {"title":"2 {{ _('weeks') }}", "value": 336},
-            {"title":"{{ _('Month') }}", "value": 720},
-            {"title":"3 {{ _('months') }}", "value": 2160},
-            {"title":"6 {{ _('months') }}", "value": 4320},
-            {"title":"{{ _('Year') }}", "value": 8640},
-            {"title":"{{ _('All') }}", "value": -1},
-          ],
-          chartType: "line",
-          chartTypes: [
-            {"title":"{{ _('Line') }}", "value": 'line'},
-            {"title":"{{ _('Column') }}", "value": 'column'},
-            {"title":"{{ _('Spline') }}", "value": 'spline'},
-            {"title":"{{ _('Area') }}", "value": 'area'},
-            {"title":"{{ _('Step') }}", "value": 'step'},
-          ]
-        };
+  <div class="card mb-3">
+    <div class="card-body">
+      <div class="history-toolbar">
+        <div class="history-toolbar-group">
+          <span class="history-toolbar-label">{{ _('Interval') }}</span>
+          <div class="history-periods">
+            <button class="btn btn-outline-secondary btn-sm" data-range="1">1h</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="24">24h</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="168">7d</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="336">14d</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="720">30d</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="2160">3m</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="4320">6m</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="8760">1y</button>
+            <button class="btn btn-outline-secondary btn-sm" id="btnToday">{{ _('Today') }}</button>
+            <button class="btn btn-outline-secondary btn-sm" id="btnYesterday">{{ _('Yesterday') }}</button>
+            <button class="btn btn-outline-secondary btn-sm" id="btnAll">{{ _('All') }}</button>
+          </div>
+        </div>
+        <div class="history-toolbar-group">
+          <span class="history-toolbar-label">{{ _('From') }}</span>
+          <div class="history-field">
+          <input id="dtBegin" type="datetime-local" class="form-control">
+          </div>
+        </div>
+        <div class="history-toolbar-group">
+          <span class="history-toolbar-label">{{ _('To') }}</span>
+          <div class="history-field">
+          <input id="dtEnd" type="datetime-local" class="form-control">
+          </div>
+        </div>
+        <div class="history-actions">
+          <button id="btnApply" class="btn btn-primary">{{ _('Apply') }}</button>
+          <button id="btnExport" class="btn btn-outline-secondary"><i class="fa-solid fa-file-csv me-1"></i>CSV</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <ul class="nav nav-tabs mb-3" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#history-tab-charts" type="button" role="tab">{{ _('Graph') }}</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-tab-analytics" type="button" role="tab">{{ _('Analytics') }}</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-tab-table" type="button" role="tab">{{ _('Table') }}</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#history-tab-info" type="button" role="tab">{{ _('Info') }}</button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="history-tab-charts" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-2">
+            <div>
+              <h5 class="mb-0">{{ _('Graph') }}</h5>
+              <small class="history-muted" id="chartCaption"></small>
+              <span id="chartTypeHelp" class="history-help-icon" title="" aria-label="{{ _('Selected chart type description') }}" tabindex="0">?</span>
+            </div>
+            <div class="d-flex align-items-end gap-3 flex-wrap" id="chartControls">
+              <div style="min-width: 220px;">
+                <label class="form-label mb-1">
+                  <span class="history-metric-label">
+                    <span>{{ _('Chart Type') }}</span>
+                  </span>
+                </label>
+                <select id="chartType" class="form-select form-select-sm">
+                  <option value="line">{{ _('Line') }}</option>
+                  <option value="column">{{ _('Column') }}</option>
+                  <option value="spline">{{ _('Spline') }}</option>
+                  <option value="area">{{ _('Area') }}</option>
+                  <option value="areaspline">{{ _('Area Spline') }}</option>
+                  <option value="scatter">{{ _('Scatter') }}</option>
+                  <option value="step">{{ _('Step Line') }}</option>
+                  <option value="steparea">{{ _('Step Area') }}</option>
+                  <option value="movingavg">{{ _('Moving Average') }}</option>
+                  <option value="delta">{{ _('Delta') }}</option>
+                  <option value="timeline">{{ _('Event Timeline') }}</option>
+                  <option value="stepmarkers">{{ _('Step with Markers') }}</option>
+                  <option value="linearea">{{ _('Line + Area') }}</option>
+                  <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
+                  <option value="histogram">{{ _('Histogram') }}</option>
+                  <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
+                  <option value="heatmap24value">{{ _('Heatmap 24x7 (Value)') }}</option>
+                  <option value="heatmapmonth">{{ _('Heatmap Month x Day (Activity)') }}</option>
+                  <option value="heatmapmonthvalue">{{ _('Heatmap Month x Day (Value)') }}</option>
+                  <option value="waterfall">{{ _('Delta Waterfall') }}</option>
+                  <option value="bullet">{{ _('Current Progress') }}</option>
+                  <option value="radar24">{{ _('Daily Profile') }}</option>
+                </select>
+              </div>
+              <div id="chartPaletteControl" style="min-width: 180px;">
+                <label class="form-label mb-1">{{ _('Palette') }}</label>
+                <select id="chartPalette" class="form-select form-select-sm">
+                  <option value="classic">{{ _('Classic') }}</option>
+                  <option value="soft">{{ _('Soft') }}</option>
+                  <option value="contrast">{{ _('Contrast') }}</option>
+                  <option value="ocean">{{ _('Ocean') }}</option>
+                  <option value="sunset">{{ _('Sunset') }}</option>
+                  <option value="forest">{{ _('Forest') }}</option>
+                  <option value="fire">{{ _('Fire') }}</option>
+                  <option value="mono">{{ _('Monochrome') }}</option>
+                  <option value="neon">{{ _('Neon') }}</option>
+                  <option value="aurora">{{ _('Aurora') }}</option>
+                  <option value="desert">{{ _('Desert') }}</option>
+                  <option value="vintage">{{ _('Vintage') }}</option>
+                  <option value="ice">{{ _('Ice') }}</option>
+                  <option value="berry">{{ _('Berry') }}</option>
+                  <option value="mint">{{ _('Mint') }}</option>
+                  <option value="tempdiv">{{ _('Temperature +/-') }}</option>
+                  <option value="tempsmooth">{{ _('Temperature Smooth') }}</option>
+                  <option value="preset_temperature">{{ _('Preset: Temperature') }}</option>
+                  <option value="preset_humidity">{{ _('Preset: Humidity') }}</option>
+                  <option value="preset_power">{{ _('Preset: Power') }}</option>
+                  <option value="preset_co2">{{ _('Preset: CO2') }}</option>
+                  <option value="preset_activity">{{ _('Preset: Activity') }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div id="mainChart" class="history-chart"></div>
+          <div id="chartResizeHandle" class="history-chart-resize" role="separator" aria-label="{{ _('Resize chart height') }}" tabindex="0"></div>
+          <div id="chartUnavailableNote" class="alert alert-secondary history-unavailable d-none mb-0"></div>
+        </div>
+
+        <div class="tab-pane fade" id="history-tab-analytics" role="tabpanel">
+          <div id="analyticsUnavailableNote" class="alert alert-secondary history-unavailable d-none"></div>
+          <div id="analyticsContent">
+          <div class="history-summary mb-3" id="analyticsStatsCards"></div>
+          <div class="history-summary mb-3" id="analyticsBehaviorCards"></div>
+          <div class="history-grid-2 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <h6 class="mb-2">{{ _('Hourly Activity') }}</h6>
+                <div id="analyticsHourlyChart" class="history-mini-chart"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0" id="analyticsProfileTitle">{{ _('Profile') }}</h6>
+                  <small class="history-muted" id="analyticsProfileCaption"></small>
+                </div>
+                <div id="analyticsProfileChart" class="history-mini-chart"></div>
+              </div>
+            </div>
+          </div>
+          <div class="history-grid-2 mb-3">
+            <div class="card">
+              <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <h6 class="mb-0">{{ _('Top Jumps') }}</h6>
+                  <small class="history-muted">{{ _('Largest value changes') }}</small>
+                </div>
+                <div class="table-responsive">
+                  <table class="table table-sm align-middle mb-0">
+                    <thead>
+                      <tr>
+                        <th>{{ _('When') }}</th>
+                        <th>{{ _('Transition') }}</th>
+                        <th>{{ _('Delta') }}</th>
+                        <th>{{ _('Source') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody id="topJumpsTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="history-grid-3">
+            <div class="card">
+              <div class="card-body">
+                <h6 class="mb-2">{{ _('By Sources') }}</h6>
+                <div id="sourceChart" class="history-mini-chart"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body">
+                <h6 class="mb-2">{{ _('By Values') }}</h6>
+                <div id="valueChart" class="history-mini-chart"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body">
+                <h6 class="mb-2">{{ _('State Duration') }}</h6>
+                <div id="durationChart" class="history-mini-chart"></div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="history-tab-table" role="tabpanel">
+          <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
+            <div style="min-width: 200px;">
+              <label class="form-label">{{ _('Search') }}</label>
+              <input id="searchQuery" type="text" class="form-control">
+            </div>
+            <div style="min-width: 200px;">
+              <label class="form-label">{{ _('Source') }}</label>
+              <select id="sourceFilter" class="form-select">
+                <option value="">{{ _('All') }}</option>
+              </select>
+            </div>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" id="onlyChanges">
+              <label class="form-check-label" for="onlyChanges">{{ _('Only changes') }}</label>
+            </div>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-striped history-table">
+              <thead>
+                <tr>
+                  <th class="history-sortable" data-sort-key="added">{{ _('Changed') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="source">{{ _('Source') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="transition">{{ _('Transition') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="delta">{{ _('Delta') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="duration">{{ _('State duration') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="current_for">{{ _('Current for') }}<span class="sort-indicator"></span></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="history-tab-info" role="tabpanel">
+          <div class="history-summary mb-3" id="summaryCards"></div>
+          <div class="history-grid-2">
+            <div class="history-panel">
+              <h6>{{ _('Property') }}</h6>
+              <div class="history-facts">
+                <div><strong>{{ _('Name') }}</strong><span id="infoName"></span></div>
+                <div><strong>{{ _('Description') }}</strong><span id="tabInfoDescription"></span></div>
+                <div><strong>{{ _('Type') }}</strong><span id="infoType"></span></div>
+                <div><strong>{{ _('History') }}</strong><span id="infoHistory"></span></div>
+              </div>
+            </div>
+            <div class="history-panel">
+              <h6>{{ _('Last State') }}</h6>
+              <div class="history-facts">
+                <div><strong>{{ _('Value') }}</strong><span id="tabInfoLastValue"></span></div>
+                <div><strong>{{ _('Source') }}</strong><span id="tabInfoLastSource"></span></div>
+                <div><strong>{{ _('Changed') }}</strong><span id="tabInfoLastChanged"></span></div>
+                <div><strong>{{ _('Comparison with previous period') }}</strong><span id="tabInfoCompare"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const state = {
+    objectName: {{ object.name|tojson }},
+    propertyName: {{ name|tojson }},
+    propertyInfo: null,
+    payload: null,
+    filteredEntries: [],
+    loading: false,
+    activeRange: null,
+    themeRefreshTimer: null,
+    chartHeight: 420,
+    mainChart: null,
+    uiPrefs: null,
+    tableSort: {
+      key: "added",
+      dir: "desc"
+    }
+  };
+  const UI_PREFS_STORAGE_PREFIX = "historyView.uiPrefs";
+  const chartI18n = {
+    typeLabels: {
+      line: {{ _('Line')|tojson }},
+      column: {{ _('Column')|tojson }},
+      spline: {{ _('Spline')|tojson }},
+      area: {{ _('Area')|tojson }},
+      areaspline: {{ _('Area Spline')|tojson }},
+      scatter: {{ _('Scatter')|tojson }},
+      step: {{ _('Step Line')|tojson }},
+      steparea: {{ _('Step Area')|tojson }},
+      movingavg: {{ _('Moving Average')|tojson }},
+      delta: {{ _('Delta')|tojson }},
+      timeline: {{ _('Event Timeline')|tojson }},
+      stepmarkers: {{ _('Step with Markers')|tojson }},
+      linearea: {{ _('Line + Area')|tojson }},
+      ohlc: {{ _('OHLC by Intervals')|tojson }},
+      histogram: {{ _('Histogram')|tojson }},
+      heatmap24: {{ _('Heatmap 24x7')|tojson }},
+      heatmap24value: {{ _('Heatmap 24x7 (Value)')|tojson }},
+      heatmapmonth: {{ _('Heatmap Month x Day (Activity)')|tojson }},
+      heatmapmonthvalue: {{ _('Heatmap Month x Day (Value)')|tojson }},
+      waterfall: {{ _('Delta Waterfall')|tojson }},
+      bullet: {{ _('Current Progress')|tojson }},
+      radar24: {{ _('Daily Profile')|tojson }}
+    },
+    typeDescriptions: {
+      line: {{ _('Chart type description line')|tojson }},
+      column: {{ _('Chart type description column')|tojson }},
+      spline: {{ _('Chart type description spline')|tojson }},
+      area: {{ _('Chart type description area')|tojson }},
+      areaspline: {{ _('Chart type description areaspline')|tojson }},
+      scatter: {{ _('Chart type description scatter')|tojson }},
+      step: {{ _('Chart type description step')|tojson }},
+      steparea: {{ _('Chart type description steparea')|tojson }},
+      movingavg: {{ _('Chart type description movingavg')|tojson }},
+      delta: {{ _('Chart type description delta')|tojson }},
+      timeline: {{ _('Chart type description timeline')|tojson }},
+      stepmarkers: {{ _('Chart type description stepmarkers')|tojson }},
+      linearea: {{ _('Chart type description linearea')|tojson }},
+      ohlc: {{ _('Chart type description ohlc')|tojson }},
+      histogram: {{ _('Chart type description histogram')|tojson }},
+      heatmap24: {{ _('Chart type description heatmap24')|tojson }},
+      heatmap24value: {{ _('Chart type description heatmap24value')|tojson }},
+      heatmapmonth: {{ _('Chart type description heatmapmonth')|tojson }},
+      heatmapmonthvalue: {{ _('Chart type description heatmapmonthvalue')|tojson }},
+      waterfall: {{ _('Chart type description waterfall')|tojson }},
+      bullet: {{ _('Chart type description bullet')|tojson }},
+      radar24: {{ _('Chart type description radar24')|tojson }}
+    }
+  };
+  const historyText = {
+    unknown: {{ _('Unknown')|tojson }},
+    summaryRecords: {{ _('Records')|tojson }},
+    summaryLastValue: {{ _('Last value')|tojson }},
+    summaryNoChanges: {{ _('No changes for')|tojson }},
+    summaryChangesPerHour: {{ _('Changes per hour')|tojson }},
+    summaryDistinctValues: {{ _('Distinct values')|tojson }},
+    summaryTopSource: {{ _('Top source')|tojson }},
+    summaryMinMax: {{ _('Min / Max')|tojson }},
+    summaryAverage: {{ _('Average')|tojson }},
+    captionViewPrefix: {{ _('View')|tojson }},
+    captionStatePrefix: {{ _('State timeline')|tojson }},
+    captionStateFallback: {{ _('Base mode used (selected type requires numeric property)')|tojson }},
+    timelineEvents: {{ _('Events')|tojson }},
+    timelineChange: {{ _('Change')|tojson }},
+    timelineTransition: {{ _('Transition')|tojson }},
+    timelineValue: {{ _('Value')|tojson }},
+    timelineSource: {{ _('Source')|tojson }},
+    histogramValueAxis: {{ _('Value')|tojson }},
+    histogramFrequency: {{ _('Frequency')|tojson }},
+    histogramValues: {{ _('Values')|tojson }},
+    histogramDistribution: {{ _('Distribution')|tojson }},
+    heatmapHours: {{ _('Hours')|tojson }},
+    heatmapDayOfMonth: {{ _('Day of month')|tojson }},
+    heatmapMonth: {{ _('Month')|tojson }},
+    heatmapWeekday: {{ _('Weekday')|tojson }},
+    heatmapChanges: {{ _('Changes')|tojson }},
+    heatmapActivity: {{ _('Activity')|tojson }},
+    heatmapMonthlyActivity: {{ _('Monthly activity')|tojson }},
+    heatmapMonthlyValue: {{ _('Monthly average value')|tojson }},
+    heatmapValue: {{ _('Average value')|tojson }},
+    heatmapPoints: {{ _('Points')|tojson }},
+    heatmapNoData: {{ _('No numeric data')|tojson }},
+    heatmapMon: {{ _('Mon')|tojson }},
+    heatmapTue: {{ _('Tue')|tojson }},
+    heatmapWed: {{ _('Wed')|tojson }},
+    heatmapThu: {{ _('Thu')|tojson }},
+    heatmapFri: {{ _('Fri')|tojson }},
+    heatmapSat: {{ _('Sat')|tojson }},
+    heatmapSun: {{ _('Sun')|tojson }},
+    movingAverageSource: {{ _('Source series')|tojson }},
+    movingAverageLine: {{ _('Moving average (10)')|tojson }},
+    deltaAxis: {{ _('Delta')|tojson }},
+    deltaSeries: {{ _('Delta between adjacent values')|tojson }},
+    waterfallAxis: {{ _('Delta and cumulative')|tojson }},
+    waterfallDelta: {{ _('Delta')|tojson }},
+    waterfallCumulative: {{ _('Cumulative total')|tojson }},
+    bulletCurrentCategory: {{ _('Current value')|tojson }},
+    bulletAxis: {{ _('Value')|tojson }},
+    bulletAverage: {{ _('Average')|tojson }},
+    bulletCurrent: {{ _('Current')|tojson }},
+    profileSeries: {{ _('24h Profile')|tojson }},
+    profileAxisAverage: {{ _('Average value')|tojson }},
+    chartTypeUnavailableDescription: {{ _('Chart type description unavailable')|tojson }},
+    chartTypeAriaPrefix: {{ _('Chart type description')|tojson }},
+    metricAriaPrefix: {{ _('Metric description')|tojson }},
+    noNumericJumps: {{ _('No numeric jumps for selected period')|tojson }},
+    statsMedian: {{ _('Median')|tojson }},
+    behaviorMin: {{ _('Minimum')|tojson }},
+    behaviorMax: {{ _('Maximum')|tojson }},
+    behaviorTrend: {{ _('Trend')|tojson }},
+    behaviorIncrement: {{ _('Increment')|tojson }},
+    behaviorActiveTime: {{ _('Time in 1')|tojson }},
+    behaviorActivations: {{ _('Activations')|tojson }},
+    trendUp: {{ _('Up')|tojson }},
+    trendDown: {{ _('Down')|tojson }},
+    trendFlat: {{ _('Flat')|tojson }},
+    hourlyAxis: {{ _('Hour of day')|tojson }},
+    hourlyChangesAxis: {{ _('Changes')|tojson }},
+    hourlyPointFormat: {{ _('Changes point format')|tojson }},
+    hourlySeries: {{ _('Activity')|tojson }},
+    profileIncrementSeries: {{ _('Increment')|tojson }},
+    profileIncrementAxis: {{ _('Increment')|tojson }},
+    profileIncrementTitle: {{ _('Increment by hour')|tojson }},
+    profileIncrementCaption: {{ _('For counters')|tojson }},
+    profileActiveSeries: {{ _('Time in 1')|tojson }},
+    profileActiveAxis: {{ _('Minutes')|tojson }},
+    profileActiveTitle: {{ _('Active time by hour')|tojson }},
+    profileActiveCaption: {{ _('For binary signals')|tojson }},
+    profileAverageSeries: {{ _('Average')|tojson }},
+    profileAverageAxis: {{ _('Average value')|tojson }},
+    profileAverageTitle: {{ _('Daily profile')|tojson }},
+    profileAverageCaption: {{ _('Average value by hour')|tojson }},
+    chartUnavailable: {{ _('Charts are available only for numeric and boolean properties')|tojson }},
+    analyticsUnavailable: {{ _('Analytics charts are unavailable for this property type')|tojson }},
+    sortAsc: {{ _('ascending')|tojson }},
+    sortDesc: {{ _('descending')|tojson }}
+  };
+  const CHART_HEIGHT_MIN = 260;
+  const CHART_HEIGHT_MAX = 1000;
+  const CHART_HEIGHT_STORAGE_KEY = "historyView.mainChartHeight";
+
+  function qs(id) {
+    return document.getElementById(id);
+  }
+
+  function getPropertyStorageKey() {
+    return `${UI_PREFS_STORAGE_PREFIX}:${state.objectName}.${state.propertyName}`;
+  }
+
+  function loadUiPrefs() {
+    const fallback = {
+      chartType: "line",
+      chartPalette: "classic",
+      dtBegin: "",
+      dtEnd: "",
+      activeRange: null,
+      searchQuery: "",
+      sourceFilter: "",
+      onlyChanges: false,
+      tableSortKey: "added",
+      tableSortDir: "desc"
+    };
+    try {
+      const raw = window.localStorage.getItem(getPropertyStorageKey());
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      const paletteCandidate = typeof parsed.chartPalette === "string" && parsed.chartPalette
+        ? parsed.chartPalette
+        : (typeof parsed.heatmapPalette === "string" && parsed.heatmapPalette ? parsed.heatmapPalette : fallback.chartPalette);
+      return {
+        chartType: typeof parsed.chartType === "string" && parsed.chartType ? parsed.chartType : fallback.chartType,
+        chartPalette: paletteCandidate,
+        dtBegin: typeof parsed.dtBegin === "string" ? parsed.dtBegin : fallback.dtBegin,
+        dtEnd: typeof parsed.dtEnd === "string" ? parsed.dtEnd : fallback.dtEnd,
+        activeRange: parsed.activeRange == null ? null : String(parsed.activeRange),
+        searchQuery: typeof parsed.searchQuery === "string" ? parsed.searchQuery : fallback.searchQuery,
+        sourceFilter: typeof parsed.sourceFilter === "string" ? parsed.sourceFilter : fallback.sourceFilter,
+        onlyChanges: Boolean(parsed.onlyChanges),
+        tableSortKey: typeof parsed.tableSortKey === "string" ? parsed.tableSortKey : fallback.tableSortKey,
+        tableSortDir: parsed.tableSortDir === "asc" ? "asc" : fallback.tableSortDir
+      };
+    } catch (error) {
+      return fallback;
+    }
+  }
+
+  function saveUiPrefs() {
+    const chartType = qs("chartType");
+    const chartPalette = qs("chartPalette");
+    const dtBegin = qs("dtBegin");
+    const dtEnd = qs("dtEnd");
+    const searchQuery = qs("searchQuery");
+    const sourceFilter = qs("sourceFilter");
+    const onlyChanges = qs("onlyChanges");
+    state.uiPrefs = {
+      chartType: chartType ? chartType.value : state.uiPrefs?.chartType || "line",
+      chartPalette: chartPalette ? chartPalette.value : state.uiPrefs?.chartPalette || "classic",
+      dtBegin: dtBegin ? dtBegin.value : state.uiPrefs?.dtBegin || "",
+      dtEnd: dtEnd ? dtEnd.value : state.uiPrefs?.dtEnd || "",
+      activeRange: state.activeRange == null ? null : String(state.activeRange),
+      searchQuery: searchQuery ? searchQuery.value : state.uiPrefs?.searchQuery || "",
+      sourceFilter: sourceFilter ? sourceFilter.value : state.uiPrefs?.sourceFilter || "",
+      onlyChanges: onlyChanges ? onlyChanges.checked : Boolean(state.uiPrefs?.onlyChanges),
+      tableSortKey: state.tableSort?.key || "added",
+      tableSortDir: state.tableSort?.dir === "asc" ? "asc" : "desc"
+    };
+    window.localStorage.setItem(getPropertyStorageKey(), JSON.stringify(state.uiPrefs));
+  }
+
+  function restoreUiPrefsToControls() {
+    if (!state.uiPrefs) return;
+    const chartType = qs("chartType");
+    const chartPalette = qs("chartPalette");
+    const dtBegin = qs("dtBegin");
+    const dtEnd = qs("dtEnd");
+    const searchQuery = qs("searchQuery");
+    const sourceFilter = qs("sourceFilter");
+    const onlyChanges = qs("onlyChanges");
+    if (chartType) {
+      const hasOption = Array.from(chartType.options).some((option) => option.value === state.uiPrefs.chartType);
+      chartType.value = hasOption ? state.uiPrefs.chartType : "line";
+    }
+    if (chartPalette) {
+      const hasOption = Array.from(chartPalette.options).some((option) => option.value === state.uiPrefs.chartPalette);
+      chartPalette.value = hasOption ? state.uiPrefs.chartPalette : "classic";
+    }
+    if (dtBegin) dtBegin.value = state.uiPrefs.dtBegin || "";
+    if (dtEnd) dtEnd.value = state.uiPrefs.dtEnd || "";
+    if (searchQuery) searchQuery.value = state.uiPrefs.searchQuery || "";
+    if (sourceFilter) sourceFilter.dataset.prefValue = state.uiPrefs.sourceFilter || "";
+    if (onlyChanges) onlyChanges.checked = Boolean(state.uiPrefs.onlyChanges);
+    state.tableSort = {
+      key: state.uiPrefs.tableSortKey || "added",
+      dir: state.uiPrefs.tableSortDir === "asc" ? "asc" : "desc"
+    };
+    if (state.uiPrefs.activeRange != null && state.uiPrefs.activeRange !== "") {
+      setActiveRange(state.uiPrefs.activeRange);
+    }
+    updateTableSortHeaders();
+  }
+
+  function toLocalInputValue(date) {
+    if (!date) return "";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  function formatDate(value) {
+    if (!value) return "";
+    return new Date(value).toLocaleString();
+  }
+
+  function clampChartHeight(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return state.chartHeight || 420;
+    return Math.min(CHART_HEIGHT_MAX, Math.max(CHART_HEIGHT_MIN, numeric));
+  }
+
+  function applyChartHeight(height, shouldRender = true) {
+    const next = clampChartHeight(height);
+    state.chartHeight = next;
+    const chartHost = qs("mainChart");
+    if (chartHost) chartHost.style.height = `${next}px`;
+    window.localStorage.setItem(CHART_HEIGHT_STORAGE_KEY, String(next));
+    if (shouldRender && state.payload) {
+      if (state.mainChart && typeof state.mainChart.setSize === "function") {
+        state.mainChart.setSize(null, next, false);
+      } else if (isChartSupportedMode()) {
+        renderChartInto("mainChart", false);
+      }
+    }
+  }
+
+  function getThemeColors() {
+    const body = document.querySelector('[data-tag="body"]') || document.body;
+    const style = getComputedStyle(body);
+    return {
+      primary: style.getPropertyValue('--bs-primary').trim() || '#0d6efd',
+      success: style.getPropertyValue('--bs-success').trim() || '#198754',
+      info: style.getPropertyValue('--bs-info').trim() || '#0dcaf0',
+      warning: style.getPropertyValue('--bs-warning').trim() || '#ffc107',
+      danger: style.getPropertyValue('--bs-danger').trim() || '#dc3545',
+      secondary: style.getPropertyValue('--bs-secondary').trim() || '#6c757d',
+      text: style.getPropertyValue('--bs-body-color').trim() || '#212529',
+      bg: style.getPropertyValue('--bs-body-bg').trim() || '#fff',
+      border: style.getPropertyValue('--bs-border-color').trim() || '#dee2e6'
+    };
+  }
+
+  function applyTheme() {
+    const c = getThemeColors();
+    Highcharts.setOptions({
+      time: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      colors: [c.primary, c.success, c.info, c.warning, c.danger, c.secondary],
+      chart: {
+        backgroundColor: c.bg,
+        plotBackgroundColor: c.bg,
+        plotBorderColor: c.border,
+        style: { color: c.text }
       },
-      computed: {
-        // Отфильтрованные данные для таблицы
-        filteredData() {
-          if (!this.searchQuery) {
-            return this.chartData;
+      title: { style: { color: c.text } },
+      subtitle: { style: { color: c.secondary } },
+      xAxis: {
+        lineColor: c.border,
+        tickColor: c.border,
+        gridLineColor: c.border,
+        labels: { style: { color: c.text } },
+        title: { style: { color: c.text } }
+      },
+      yAxis: {
+        gridLineColor: c.border,
+        lineColor: c.border,
+        tickColor: c.border,
+        labels: { style: { color: c.text } },
+        title: { style: { color: c.text } }
+      },
+      legend: {
+        itemStyle: { color: c.text },
+        itemHoverStyle: { color: c.primary }
+      },
+      tooltip: { backgroundColor: c.bg, borderColor: c.border, style: { color: c.text } },
+      rangeSelector: {
+        buttonTheme: {
+          fill: c.bg,
+          stroke: c.border,
+          style: { color: c.text },
+          states: {
+            hover: { fill: c.border, style: { color: c.text } },
+            select: { fill: c.primary, style: { color: "#fff" } }
           }
-          const q = this.searchQuery.toLowerCase();
-          return this.chartData.filter(item => {
-            const valueStr = String(item.value ?? '').toLowerCase();
-            const dateStr = this.formatDate(item.added).toLowerCase();
-            const sourceStr = (item.source || 'Unknown').toLowerCase();
-            return valueStr.includes(q) || dateStr.includes(q) || sourceStr.includes(q);
-          });
         },
-        // Отфильтрованные и отсортированные данные
-        sortedData() {
-          const data = this.filteredData.slice();
-          const key = this.sortKey;
-          const order = this.sortOrder === 'asc' ? 1 : -1;
-          return data.sort((a, b) => {
-            let aVal = a[key];
-            let bVal = b[key];
-
-            if (key === 'added') {
-              aVal = new Date(aVal);
-              bVal = new Date(bVal);
-            } else if (key === 'value') {
-              aVal = Number(aVal);
-              bVal = Number(bVal);
-            } else {
-              aVal = (aVal ?? '').toString().toLowerCase();
-              bVal = (bVal ?? '').toString().toLowerCase();
-            }
-
-            if (aVal < bVal) return -1 * order;
-            if (aVal > bVal) return 1 * order;
-            return 0;
-          });
+        inputStyle: {
+          backgroundColor: c.bg,
+          color: c.text
         },
-        // Вычисляемые данные для текущей страницы
-        paginatedData() {
-          const start = (this.currentPage - 1) * this.pageSize;
-          const end = start + this.pageSize;
-          return this.sortedData.slice(start, end);
-        },
-        // Общее количество страниц
-        totalPages() {
-          return Math.max(1, Math.ceil(this.filteredData.length / this.pageSize) || 1);
-        },
-        // Запись с минимальным значением
-        minRecord() {
-          if (!this.chartData.length) return null;
-          return this.chartData.reduce((min, current) => {
-            const minVal = Number(min.value);
-            const curVal = Number(current.value);
-            return curVal < minVal ? current : min;
-          });
-        },
-        // Запись с максимальным значением
-        maxRecord() {
-          if (!this.chartData.length) return null;
-          return this.chartData.reduce((max, current) => {
-            const maxVal = Number(max.value);
-            const curVal = Number(current.value);
-            return curVal > maxVal ? current : max;
-          });
-        },
-        viewCharts(){
-          return this.info.type=='int' || this.info.type=='float' || this.info.type=='bool'
+        labelStyle: { color: c.text }
+      },
+      navigator: {
+        maskFill: "rgba(13, 110, 253, 0.15)",
+        outlineColor: c.border,
+        xAxis: {
+          gridLineColor: c.border,
+          labels: { style: { color: c.text } }
         }
       },
-      watch:{
-        period(){
-          this.fetchData()
-        },
-        searchQuery() {
-          this.currentPage = 1;
-        },
-      },
-      methods: {
-        // Получение цветов из CSS переменных Bootstrap 5
-        getBootstrapColors() {
-          // Получаем актуальный элемент body с учетом текущей темы
-          const body = document.querySelector('[data-tag="body"]') || document.body;
-          const currentTheme = body.getAttribute('data-bs-theme');
-          const isDark = currentTheme === 'dark';
-          
-          // Получаем CSS переменные Bootstrap 5 из вычисленных стилей
-          const getCSSVariable = (varName) => {
-            const value = getComputedStyle(body).getPropertyValue(varName).trim();
-            // Если значение пустое, возвращаем null
-            return value || null;
-          };
-          
-          // Получаем значения с fallback на значения по умолчанию
-          const primary = getCSSVariable('--bs-primary') || (isDark ? '#0d6efd' : '#0d6efd');
-          const secondary = getCSSVariable('--bs-secondary') || (isDark ? '#6c757d' : '#6c757d');
-          const textColor = getCSSVariable('--bs-body-color') || (isDark ? '#fff' : '#212529');
-          const backgroundColor = getCSSVariable('--bs-body-bg') || (isDark ? '#212529' : '#fff');
-          const borderColor = getCSSVariable('--bs-border-color') || (isDark ? '#495057' : '#dee2e6');
-          
-          const colors = {
-            // Основные цвета
-            primary: primary,
-            secondary: secondary,
-            success: getCSSVariable('--bs-success') || (isDark ? '#198754' : '#198754'),
-            danger: getCSSVariable('--bs-danger') || (isDark ? '#dc3545' : '#dc3545'),
-            warning: getCSSVariable('--bs-warning') || (isDark ? '#ffc107' : '#ffc107'),
-            info: getCSSVariable('--bs-info') || (isDark ? '#0dcaf0' : '#0dcaf0'),
-            
-            // Цвета текста и фона
-            textColor: textColor,
-            backgroundColor: backgroundColor,
-            
-            // Цвета границ
-            borderColor: borderColor,
-            
-            // Дополнительные цвета для графиков
-            gridLineColor: borderColor,
-            minorGridLineColor: getCSSVariable('--bs-border-color') || (isDark ? '#343a40' : '#e9ecef'),
-            
-            // Цвета для rangeSelector и navigator
-            rangeSelectorButton: isDark ? '#495057' : '#f8f9fa',
-            rangeSelectorButtonHover: isDark ? '#6c757d' : '#e9ecef',
-            rangeSelectorButtonActive: primary,
-          };
-          
-          console.log('Bootstrap colors retrieved for theme:', currentTheme, colors);
-          return colors;
-        },
-        // Применение темы Bootstrap 5 к Highcharts
-        applyBootstrapTheme() {
-          const colors = this.getBootstrapColors();
-          console.log('Applying Bootstrap theme, colors:', colors);
-          
-          Highcharts.setOptions({
-            time: {
-              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-            },
-            colors: [
-              colors.primary,
-              colors.success,
-              colors.info,
-              colors.warning,
-              colors.danger,
-              colors.secondary,
-              '#fd7e14',
-              '#20c997',
-              '#6f42c1',
-              '#d63384'
-            ],
-            chart: {
-              backgroundColor: colors.backgroundColor,
-              borderColor: colors.borderColor,
-              style: {
-                color: colors.textColor,
-                fontFamily: 'var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)'
-              }
-            },
-            title: {
-              style: {
-                color: colors.textColor
-              }
-            },
-            subtitle: {
-              style: {
-                color: colors.textColor
-              }
-            },
-            xAxis: {
-              gridLineColor: colors.gridLineColor,
-              lineColor: colors.borderColor,
-              minorGridLineColor: colors.minorGridLineColor,
-              tickColor: colors.borderColor,
-              title: {
-                style: {
-                  color: colors.textColor
-                }
-              },
-              labels: {
-                style: {
-                  color: colors.textColor
-                }
-              }
-            },
-            yAxis: {
-              gridLineColor: colors.gridLineColor,
-              lineColor: colors.borderColor,
-              minorGridLineColor: colors.minorGridLineColor,
-              tickColor: colors.borderColor,
-              title: {
-                style: {
-                  color: colors.textColor
-                }
-              },
-              labels: {
-                style: {
-                  color: colors.textColor
-                }
-              }
-            },
-            legend: {
-              backgroundColor: colors.backgroundColor,
-              itemStyle: {
-                color: colors.textColor
-              },
-              itemHoverStyle: {
-                color: colors.primary
-              },
-              itemHiddenStyle: {
-                color: colors.secondary
-              }
-            },
-            credits: {
-              style: {
-                color: colors.secondary
-              }
-            },
-            labels: {
-              style: {
-                color: colors.textColor
-              }
-            },
-            tooltip: {
-              backgroundColor: colors.backgroundColor,
-              borderColor: colors.borderColor,
-              style: {
-                color: colors.textColor
-              }
-            },
-            plotOptions: {
-              series: {
-                borderColor: colors.borderColor
-              },
-              boxplot: {
-                fillColor: colors.backgroundColor
-              },
-              candlestick: {
-                lineColor: colors.textColor
-              },
-              errorbar: {
-                color: colors.textColor
-              }
-            },
-            rangeSelector: {
-              buttonTheme: {
-                fill: colors.rangeSelectorButton,
-                stroke: colors.borderColor,
-                style: {
-                  color: colors.textColor
-                },
-                states: {
-                  hover: {
-                    fill: colors.rangeSelectorButtonHover,
-                    stroke: colors.borderColor,
-                    style: {
-                      color: colors.textColor
-                    }
-                  },
-                  select: {
-                    fill: colors.rangeSelectorButtonActive,
-                    stroke: colors.borderColor,
-                    style: {
-                      color: '#fff'
-                    }
-                  }
-                }
-              },
-              inputBoxBorderColor: colors.borderColor,
-              inputStyle: {
-                backgroundColor: colors.backgroundColor,
-                color: colors.textColor
-              },
-              labelStyle: {
-                color: colors.textColor
-              }
-            },
-            navigator: {
-              handles: {
-                backgroundColor: colors.backgroundColor,
-                borderColor: colors.borderColor
-              },
-              outlineColor: colors.borderColor,
-              maskFill: 'rgba(0, 0, 0, 0.1)',
-              series: {
-                color: colors.primary,
-                lineColor: colors.primary
-              },
-              xAxis: {
-                gridLineColor: colors.gridLineColor
-              }
-            },
-            scrollbar: {
-              barBackgroundColor: colors.rangeSelectorButton,
-              barBorderColor: colors.borderColor,
-              buttonArrowColor: colors.textColor,
-              buttonBackgroundColor: colors.backgroundColor,
-              buttonBorderColor: colors.borderColor,
-              rifleColor: colors.textColor,
-              trackBackgroundColor: colors.backgroundColor,
-              trackBorderColor: colors.borderColor
-            }
-          });
-        },
-        // Обновление графиков при смене темы
-        updateChartsTheme() {
-          console.log('Updating charts theme...');
-          
-          // ВСЕГДА применяем тему Bootstrap 5 (обновляем глобальные настройки Highcharts)
-          // Это должно быть сделано независимо от наличия данных
-          this.applyBootstrapTheme();
-          
-          // Задержка, чтобы CSS переменные точно обновились
-          setTimeout(() => {
-            // Находим существующие графики
-            const existingLineChart = Highcharts.charts.find(chart => 
-              chart && chart.renderTo && chart.renderTo.id === 'lineChart'
-            );
-            const existingPieChart = Highcharts.charts.find(chart => 
-              chart && chart.renderTo && chart.renderTo.id === 'pieChart'
-            );
-            
-            // Если есть данные - пересоздаем графики с новой темой
-            if (this.values && this.values.length > 0) {
-              // Уничтожаем и пересоздаем линейный график
-              if (existingLineChart) {
-                console.log('Destroying existing line chart to recreate with new theme');
-                existingLineChart.destroy();
-              }
-              
-              // Небольшая пауза перед пересозданием
-              setTimeout(() => {
-                console.log('Recreating line chart with new theme');
-                this.updateChart();
-              }, 50);
-            } else if (existingLineChart) {
-              // Если данных нет, но график существует - обновляем его тему через update()
-              console.log('No data available, updating existing chart theme');
-              try {
-                const colors = this.getBootstrapColors();
-                existingLineChart.update({
-                  chart: {
-                    backgroundColor: colors.backgroundColor,
-                    style: {
-                      color: colors.textColor
-                    }
-                  },
-                  title: {
-                    style: {
-                      color: colors.textColor
-                    }
-                  },
-                  xAxis: {
-                    gridLineColor: colors.gridLineColor,
-                    lineColor: colors.borderColor,
-                    tickColor: colors.borderColor,
-                    labels: {
-                      style: {
-                        color: colors.textColor
-                      }
-                    }
-                  },
-                  yAxis: {
-                    gridLineColor: colors.gridLineColor,
-                    lineColor: colors.borderColor,
-                    tickColor: colors.borderColor,
-                    labels: {
-                      style: {
-                        color: colors.textColor
-                      }
-                    }
-                  }
-                }, true); // true = redraw
-              } catch (e) {
-                console.error('Error updating chart theme:', e);
-              }
-            }
-            
-            // Обновляем круговую диаграмму, если есть данные
-            if (this.sourceCounts && Object.keys(this.sourceCounts).length > 0) {
-              // Уничтожаем и пересоздаем круговую диаграмму
-              if (existingPieChart) {
-                console.log('Destroying existing pie chart to recreate with new theme');
-                existingPieChart.destroy();
-              }
-              
-              setTimeout(() => {
-                const pieData = Object.keys(this.sourceCounts).map(source => ({
-                  name: source,
-                  y: this.sourceCounts[source]
-                }));
-                
-                console.log('Recreating pie chart with new theme');
-                Highcharts.chart('pieChart', {
-                  chart: { 
-                    type: 'pie',
-                    options3d: {
-                      enabled: true,
-                      alpha: 45,
-                      beta: 0
-                    },
-                  },
-                  plotOptions: {
-                      pie: {
-                          allowPointSelect: true,
-                          cursor: 'pointer',
-                          depth: 35,
-                          dataLabels: {
-                              enabled: true,
-                              format: '{point.name}'
-                          }
-                      }
-                  },
-                  title: { text: "{{ _('Distribution by sources')}}" },
-                  series: [{
-                    name: "{{ _('Sources')}}",
-                    data: pieData
-                  }]
-                });
-              }, 50);
-            } else if (existingPieChart) {
-              // Если данных нет, но график существует - обновляем его тему
-              console.log('No pie data available, updating existing pie chart theme');
-              try {
-                const colors = this.getBootstrapColors();
-                existingPieChart.update({
-                  chart: {
-                    backgroundColor: colors.backgroundColor,
-                    style: {
-                      color: colors.textColor
-                    }
-                  },
-                  title: {
-                    style: {
-                      color: colors.textColor
-                    }
-                  }
-                }, true); // true = redraw
-              } catch (e) {
-                console.error('Error updating pie chart theme:', e);
-              }
-            }
-          }, 150);
-        },
-        // Формирование временного диапазона для последнего часа
-        getDateTimeRange() {
-          const now = new Date();
-          console.log(now)
-          var hoursAgo = new Date("2000-01-01")
-          if (this.period > 0) 
-            hoursAgo = new Date(now.getTime() - this.period * 60 * 60 * 1000); // Вычитаем период в часах
-
-          const dtBegin = new Date(hoursAgo.getTime() - (hoursAgo.getTimezoneOffset() * 60000)).toISOString().split('.')[0]; // Убираем миллисекунды
-          const dtEnd = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('.')[0]; // Убираем миллисекунды
-
-          return { dtBegin, dtEnd };
-        },
-        // Сортировка данных по дате в обратном порядке
-        sortDataByDateDescending(data) {
-          return data.sort((a, b) => {
-            const dateA = new Date(a.added);
-            const dateB = new Date(b.added);
-            return dateB - dateA; // От поздней к ранней
-          });
-        },
-        fetchInfo(){
-          fetch("/api/property/info/"+this.object_name+"."+this.property_name)
-          .then(response => response.json())
-          .then(data => {
-            console.log(data)
-            if (data.success) {
-              this.info = data.result
-              if (this.info.type == 'int')
-                this.step = 'left'
-              this.fetchData()
-            }
-          })
-          .catch(error => {
-            console.error('Ошибка при запросе к API:', error);
-          });
-        },
-        // Загрузка данных через API
-        fetchData() {
-          this.loading = true
-          const { dtBegin, dtEnd } = this.getDateTimeRange();
-          console.log(dtBegin, dtEnd)
-
-          fetch(`/api/property/history?object=${this.object_name}&property=${this.property_name}&dt_begin=${dtBegin}&dt_end=${dtEnd}`)
-          .then(response => response.json())
-          .then(data => {
-            if (data.success) {
-              // ВСЕГДА применяем тему Bootstrap 5 перед обработкой данных
-              // Это гарантирует, что тема будет применена даже если данных нет или они пустые
-              this.applyBootstrapTheme();
-              
-              this.chartData = this.sortDataByDateDescending(data.result);
-
-              if (!this.viewCharts){
-                this.loading = false
-                return
-              }
-              
-              // Подготовка данных для линейного графика
-              this.values = data.result.map(item => {
-                // Преобразуем строку даты в объект Date и затем в Unix timestamp (миллисекунды)
-                const timestamp = new Date(item.added.replace(' ', 'T')).getTime();
-                return [timestamp, item.value];
-              });
-
-              // Небольшая задержка, чтобы тема точно применилась
-              setTimeout(() => {
-                this.updateChart();
-              }, 50);
-
-              
-              // Подготовка данных для круговой диаграммы
-              this.sourceCounts = data.result.reduce((acc, item) => {
-                const source = item.source || 'Unknown';
-                acc[source] = (acc[source] || 0) + 1;
-                return acc;
-              }, {});
-
-              const pieData = Object.keys(this.sourceCounts).map(source => ({
-                name: source,
-                y: this.sourceCounts[source]
-              }));
-
-              // Инициализация круговой диаграммы
-              Highcharts.chart('pieChart', {
-                chart: { 
-                  type: 'pie',
-                  options3d: {
-                    enabled: true,
-                    alpha: 45,
-                    beta: 0
-                  },
-                },
-                plotOptions: {
-                    pie: {
-                        allowPointSelect: true,
-                        cursor: 'pointer',
-                        depth: 35,
-                        dataLabels: {
-                            enabled: true,
-                            format: '{point.name}'
-                        }
-                    }
-                },
-                title: { text: "{{ _('Distribution by sources')}}" },
-                series: [{
-                  name: "{{ _('Sources')}}",
-                  data: pieData
-                }]
-
-              });
-            } else {
-              console.error('Ошибка при загрузке данных');
-            }
-            this.loading = false
-          })
-          .catch(error => {
-            this.loading = false
-            console.error('Ошибка при запросе к API:', error);
-          });
-        },
-         updateChart(){
-           // Уничтожаем существующий график, если он есть
-           const existingChart = Highcharts.charts.find(chart => 
-             chart && chart.renderTo && chart.renderTo.id === 'lineChart'
-           );
-           if (existingChart) {
-             existingChart.destroy();
-           }
-           
-          if (this.chartType=='line')
-             this.linePreset()
-           else if (this.chartType=='column')
-             this.linePreset()
-           else if (this.chartType=='spline')
-             this.linePreset()
-           else if (this.chartType=='area')
-             this.linePreset()
-          else if (this.chartType=='step')
-            this.linePreset()
-         },
-        linePreset(){
-          // Create a timer
-          const start = +new Date();
-          // Инициализация линейного графика
-          Highcharts.chart('lineChart', {
-                chart: {
-                  events: {
-                      load: function () {
-                          if (!window.TestController) {
-                              this.setTitle(null, {
-                                  text:
-                                      "{{ _('Built chart in')}} " + (new Date() - start) + "ms"
-                              });
-                          }
-                      },
-                      // Добавляем событие после завершения зума для показа кнопки "Сброс Zoom"
-                      afterSetExtremes: function () {
-                        const chart = this.chart;
-                        if (!chart.resetZoomButton) {
-                          chart.showResetZoom(); // Показываем кнопку "Сброс Zoom"
-                        }
-                      }
-                  },
-                  type: this.chartType === 'step' ? 'line' : this.chartType,
-                  zooming: {
-                    type: 'x'
-                  },
-                  resetZoomButton: true,
-                },
-                rangeSelector: {
-                  enabled: true, // Включаем RangeSelector
-                  buttons: [
-                    { type: 'day', count: 1, text: '1D' }, // Выбор последних 1 дня
-                    { type: 'week', count: 1, text: '1W' }, // Выбор последней недели
-                    { type: 'month', count: 1, text: '1M' }, // Выбор последнего месяца
-                    { type: 'year', count: 1, text: '1Y' }, // Выбор последнего года
-                    { type: 'all', text: 'All' } // Выбор всего диапазона
-                  ],
-                  selected: 4, // По умолчанию выбран "All"
-                  inputEnabled: false
-                },
-                navigator: {
-                  enabled: true, // Включаем Navigator (превью графика)
-                  series: {
-                    color: this.getBootstrapColors().primary, // Цвет превью из Bootstrap 5
-                    lineColor: this.getBootstrapColors().primary // Цвет линии превью из Bootstrap 5
-                  }
-                },
-                title: { text: "{{ _('History')}}"},
-                xAxis: {
-                  type: 'datetime',
-                  crosshair: true // Показывать перекрестие при наведении
-                },
-                yAxis: { title: { text: "{{ _('Value')}}" } },
-                series: [{
-                  name: this.property_name+"("+this.info.description+")",
-                  step: this.chartType === 'step' ? 'left' : this.step,
-                  turboThreshold: 0, // Отключаем оптимизацию для точек
-                  data: this.values.sort(function(x, y) {
-                    if (x[0] === y[0]) {
-                      return 0;
-                    } else {
-                      return x[0] < y[0] ? -1 : 1
-                    }
-                  }),
-                  //color: '#FF3333',
-                  //negativeColor: '#48AFE8',
-                }]
-              });
-
-        },
-        // Форматирование даты
-        formatDate(dateString) {
-          const date = new Date(dateString);
-          return date.toLocaleString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'});
-        },
-        // Переключение на предыдущую страницу
-        prevPage() {
-          if (this.currentPage > 1) {
-            this.currentPage--;
-          }
-        },
-        // Переключение на следующую страницу
-        nextPage() {
-          if (this.currentPage < this.totalPages) {
-            this.currentPage++;
-          }
-        },
-        // Переключение на указанную страницу
-        goToPage(page) {
-          if (page >= 1 && page <= this.totalPages) {
-            this.currentPage = page;
-          }
-        },
-        // Смена столбца и направления сортировки
-        changeSort(column) {
-          if (this.sortKey === column) {
-            this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
-          } else {
-            this.sortKey = column;
-            this.sortOrder = 'asc';
-          }
-          this.currentPage = 1;
-        }
-      },
-      mounted() {
-        // Применяем тему Bootstrap 5 при инициализации
-        this.applyBootstrapTheme();
-        
-        // Отслеживаем изменения темы Bootstrap 5
-        const body = document.querySelector('[data-tag="body"]') || document.body;
-        const self = this;
-        
-        // MutationObserver для отслеживания изменений атрибута data-bs-theme
-        const themeObserver = new MutationObserver((mutations) => {
-          mutations.forEach((mutation) => {
-            if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
-              // Тема изменилась, обновляем графики
-              console.log('Theme changed to:', body.getAttribute('data-bs-theme'));
-              self.updateChartsTheme();
-            }
-          });
-        });
-        
-        // Начинаем наблюдение за изменениями атрибута data-bs-theme
-        themeObserver.observe(body, {
-          attributes: true,
-          attributeFilter: ['data-bs-theme']
-        });
-        
-        // Также слушаем клики на переключатель темы (на случай, если MutationObserver не сработает)
-        const themeToggle = document.querySelector('.theme-toggle');
-        if (themeToggle) {
-          themeToggle.addEventListener('click', () => {
-            // Небольшая задержка, чтобы дать время Bootstrap обновить атрибут и CSS переменные
-            setTimeout(() => {
-              console.log('Theme toggle clicked, current theme:', body.getAttribute('data-bs-theme'));
-              self.updateChartsTheme();
-            }, 200);
-          });
-        }
-        
-        // Сохраняем начальную тему для отслеживания изменений
-        self._lastTheme = body.getAttribute('data-bs-theme');
-        
-        // Дополнительная проверка изменений темы (на случай, если MutationObserver пропустит)
-        const checkThemeChange = () => {
-          const currentTheme = body.getAttribute('data-bs-theme');
-          if (self._lastTheme !== currentTheme) {
-            console.log('Theme changed from', self._lastTheme, 'to', currentTheme);
-            self._lastTheme = currentTheme;
-            self.updateChartsTheme();
-          }
-        };
-        
-        // Периодически проверяем изменения темы (каждые 300мс)
-        setInterval(checkThemeChange, 300);
-        
-        this.fetchInfo()
+      scrollbar: {
+        barBackgroundColor: c.border,
+        barBorderColor: c.border,
+        buttonArrowColor: c.text,
+        buttonBackgroundColor: c.bg,
+        buttonBorderColor: c.border,
+        rifleColor: c.text,
+        trackBackgroundColor: c.bg,
+        trackBorderColor: c.border
       }
     });
-  </script>
+  }
+
+  function scheduleThemeRefresh() {
+    if (state.themeRefreshTimer) {
+      clearTimeout(state.themeRefreshTimer);
+    }
+    state.themeRefreshTimer = setTimeout(() => {
+      state.themeRefreshTimer = null;
+      applyTheme();
+      if (state.payload) {
+        renderCharts();
+      }
+    }, 80);
+  }
+
+  function bindThemeWatcher() {
+    const targets = [document.documentElement, document.body, document.querySelector('[data-tag="body"]')].filter(Boolean);
+    const observer = new MutationObserver(() => {
+      scheduleThemeRefresh();
+    });
+    targets.forEach((target) => {
+      observer.observe(target, {
+        attributes: true,
+        attributeFilter: ["class", "data-bs-theme", "data-theme", "style"]
+      });
+    });
+    window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", scheduleThemeRefresh);
+  }
+
+  function defaultRange(hours) {
+    const end = new Date();
+    const begin = new Date(end.getTime() - hours * 3600 * 1000);
+    qs("dtBegin").value = toLocalInputValue(begin);
+    qs("dtEnd").value = toLocalInputValue(end);
+  }
+
+  function todayRange() {
+    const now = new Date();
+    const begin = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    qs("dtBegin").value = toLocalInputValue(begin);
+    qs("dtEnd").value = toLocalInputValue(now);
+  }
+
+  function yesterdayRange() {
+    const now = new Date();
+    const begin = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 0);
+    qs("dtBegin").value = toLocalInputValue(begin);
+    qs("dtEnd").value = toLocalInputValue(end);
+  }
+
+  function currentQuery() {
+    return new URLSearchParams({
+      object: state.objectName,
+      property: state.propertyName,
+      dt_begin: qs("dtBegin").value,
+      dt_end: qs("dtEnd").value
+    });
+  }
+
+  function setLoading(isLoading) {
+    state.loading = isLoading;
+    const el = qs("historyLoading");
+    if (!el) return;
+    el.classList.toggle("is-visible", isLoading);
+  }
+
+  function setActiveRange(value) {
+    state.activeRange = value;
+    document.querySelectorAll("[data-range]").forEach((button) => {
+      button.classList.toggle("active", String(button.dataset.range) === String(value));
+    });
+    const special = [
+      ["btnToday", "today"],
+      ["btnYesterday", "yesterday"],
+      ["btnAll", "all"]
+    ];
+    special.forEach(([id, key]) => {
+      const button = qs(id);
+      if (button) button.classList.toggle("active", value === key);
+    });
+  }
+
+  function applyPresetRange(value, shouldLoad = true) {
+    defaultRange(Number(value));
+    setActiveRange(value);
+    saveUiPrefs();
+    if (shouldLoad) {
+      loadHistory();
+    }
+  }
+
+  function applySavedIntervalBeforeLoad() {
+    if (!state.uiPrefs) return;
+    const savedRange = state.uiPrefs.activeRange;
+    const hasSavedRange = savedRange != null && savedRange !== "";
+    if (!hasSavedRange) return;
+
+    if (!Number.isNaN(Number(savedRange)) && Number(savedRange) > 0) {
+      defaultRange(Number(savedRange));
+      setActiveRange(String(savedRange));
+      saveUiPrefs();
+      return;
+    }
+    if (savedRange === "today") {
+      todayRange();
+      setActiveRange("today");
+      saveUiPrefs();
+      return;
+    }
+    if (savedRange === "yesterday") {
+      yesterdayRange();
+      setActiveRange("yesterday");
+      saveUiPrefs();
+      return;
+    }
+    if (savedRange === "all") {
+      qs("dtBegin").value = "";
+      qs("dtEnd").value = toLocalInputValue(new Date());
+      setActiveRange("all");
+      saveUiPrefs();
+      return;
+    }
+  }
+
+  async function loadInfo() {
+    const response = await fetch(`/api/property/info/${encodeURIComponent(state.objectName + "." + state.propertyName)}`);
+    const data = await response.json();
+    if (data.success) {
+      state.propertyInfo = data.result;
+      qs("propertyDescription").textContent = `${data.result.object_description || state.objectName} - ${data.result.description || state.propertyName}`;
+      qs("infoName").textContent = data.result.name || "";
+      qs("tabInfoDescription").textContent = data.result.description || "-";
+      qs("infoType").textContent = data.result.type || "-";
+      qs("infoHistory").textContent = data.result.history || "0";
+    }
+  }
+
+  async function loadHistory() {
+    applyTheme();
+    setLoading(true);
+    try {
+      const response = await fetch(`/HistoryView/api/history_data?${currentQuery().toString()}`);
+      const data = await response.json();
+      if (!data.success) return;
+      state.payload = data.result;
+      renderSummary();
+      renderFilters();
+      renderTable();
+      renderCharts();
+      renderInfo();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function renderSummary() {
+    const summary = state.payload.summary || {};
+    const cards = [
+      [historyText.summaryRecords, summary.count ?? 0, ""],
+      [historyText.summaryLastValue, summary.last_value || "-", "is-primary"],
+      [historyText.summaryNoChanges, summary.changed_for_label || "-", "is-primary"],
+      [historyText.summaryChangesPerHour, summary.change_rate_per_hour ?? "-", ""],
+      [historyText.summaryDistinctValues, summary.distinct_values_count ?? 0, ""],
+      [historyText.summaryTopSource, summary.top_source || "-", ""],
+      [historyText.summaryMinMax, summary.min_value != null ? `${summary.min_value} / ${summary.max_value}` : "-", ""],
+      [historyText.summaryAverage, summary.avg_value != null ? summary.avg_value : "-", ""]
+    ];
+    qs("summaryCards").innerHTML = cards.map(([label, value, cls]) => `
+      <div class="history-card ${cls}">
+        <div class="history-muted">${label}</div>
+        <div class="metric">${value}</div>
+      </div>
+    `).join("");
+  }
+
+  function renderFilters() {
+    const entries = state.payload.entries || [];
+    const sourceFilter = qs("sourceFilter");
+    if (!sourceFilter) return;
+    const current = sourceFilter.value;
+    const saved = sourceFilter.dataset.prefValue || state.uiPrefs?.sourceFilter || "";
+    const preferred = saved || current || "";
+    const sources = [...new Set(entries.map((item) => item.source || historyText.unknown))].sort();
+    if (preferred && !sources.includes(preferred)) {
+      sources.unshift(preferred);
+    }
+    sourceFilter.innerHTML = `<option value="">{{ _('All') }}</option>` + sources.map((source) => `<option value="${source}">${source}</option>`).join("");
+    sourceFilter.value = preferred || "";
+    delete sourceFilter.dataset.prefValue;
+    if (state.uiPrefs) {
+      state.uiPrefs.sourceFilter = sourceFilter.value;
+      saveUiPrefs();
+    }
+  }
+
+  function isChartSupportedMode() {
+    const mode = getEffectiveMode();
+    return mode === "numeric" || mode === "boolean";
+  }
+
+  function getEffectiveMode() {
+    if (!state.payload) return null;
+    const rawMode = String(state.payload.mode || "").toLowerCase();
+    if (rawMode === "numeric" || rawMode === "boolean") return rawMode;
+    const propertyType = String(state.payload.property_type || "").toLowerCase();
+    if (propertyType === "bool" || propertyType === "boolean") return "boolean";
+    if (["int", "integer", "float", "double", "decimal", "number", "numeric"].includes(propertyType)) {
+      return "numeric";
+    }
+    return rawMode || "state";
+  }
+
+  function setChartsAvailability() {
+    const supported = isChartSupportedMode();
+    const chartControls = qs("chartControls");
+    const chartHost = qs("mainChart");
+    const chartResizeHandle = qs("chartResizeHandle");
+    const chartUnavailableNote = qs("chartUnavailableNote");
+    const analyticsContent = qs("analyticsContent");
+    const analyticsUnavailableNote = qs("analyticsUnavailableNote");
+    const caption = qs("chartCaption");
+
+    if (chartControls) chartControls.classList.toggle("d-none", !supported);
+    if (chartHost) chartHost.classList.toggle("d-none", !supported);
+    if (chartResizeHandle) chartResizeHandle.classList.toggle("d-none", !supported);
+    if (chartUnavailableNote) {
+      chartUnavailableNote.classList.toggle("d-none", supported);
+      chartUnavailableNote.textContent = historyText.chartUnavailable;
+    }
+    if (analyticsContent) analyticsContent.classList.toggle("d-none", !supported);
+    if (analyticsUnavailableNote) {
+      analyticsUnavailableNote.classList.toggle("d-none", supported);
+      analyticsUnavailableNote.textContent = historyText.analyticsUnavailable;
+    }
+    if (!supported && caption) {
+      caption.textContent = historyText.chartUnavailable;
+    }
+  }
+
+  function getSortComparableValue(item, key) {
+    if (!item) return null;
+    if (key === "added") return Number(item.timestamp || new Date(item.added || 0).getTime() || 0);
+    if (key === "source") return String(item.source || historyText.unknown).toLowerCase();
+    if (key === "transition") return String(item.transition || item.display_value || "").toLowerCase();
+    if (key === "delta") {
+      if (item.delta_numeric != null && Number.isFinite(Number(item.delta_numeric))) return Number(item.delta_numeric);
+      const parsedDelta = parseNumericClient(item.delta_display);
+      return parsedDelta != null ? parsedDelta : String(item.delta_display || "");
+    }
+    if (key === "duration") {
+      if (item.duration_seconds != null && Number.isFinite(Number(item.duration_seconds))) return Number(item.duration_seconds);
+      return String(item.duration_label || "");
+    }
+    if (key === "current_for") {
+      if (item.changed_for_seconds != null && Number.isFinite(Number(item.changed_for_seconds))) return Number(item.changed_for_seconds);
+      return String(item.changed_for_label || "");
+    }
+    return String(item[key] ?? "");
+  }
+
+  function compareSortValues(a, b, dir) {
+    const direction = dir === "asc" ? 1 : -1;
+    const aMissing = a == null || a === "";
+    const bMissing = b == null || b === "";
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1;
+    if (bMissing) return -1;
+    if (typeof a === "number" && typeof b === "number") return (a - b) * direction;
+    return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" }) * direction;
+  }
+
+  function sortEntries(entries) {
+    const key = state.tableSort?.key || "added";
+    const dir = state.tableSort?.dir === "asc" ? "asc" : "desc";
+    return [...entries].sort((left, right) => {
+      const leftValue = getSortComparableValue(left, key);
+      const rightValue = getSortComparableValue(right, key);
+      const primary = compareSortValues(leftValue, rightValue, dir);
+      if (primary !== 0) return primary;
+      const leftTs = Number(left?.timestamp || new Date(left?.added || 0).getTime() || 0);
+      const rightTs = Number(right?.timestamp || new Date(right?.added || 0).getTime() || 0);
+      return compareSortValues(leftTs, rightTs, "desc");
+    });
+  }
+
+  function updateTableSortHeaders() {
+    const headers = document.querySelectorAll("th.history-sortable[data-sort-key]");
+    headers.forEach((header) => {
+      const key = header.dataset.sortKey;
+      const label = header.dataset.sortLabel || header.textContent.trim();
+      const indicator = header.querySelector(".sort-indicator");
+      const isActive = key === state.tableSort?.key;
+      header.classList.toggle("is-active", isActive);
+      if (indicator) indicator.textContent = isActive ? (state.tableSort.dir === "asc" ? "▲" : "▼") : "↕";
+      header.setAttribute("aria-sort", isActive ? (state.tableSort.dir === "asc" ? "ascending" : "descending") : "none");
+      const directionLabel = isActive
+        ? (state.tableSort.dir === "asc" ? historyText.sortAsc : historyText.sortDesc)
+        : historyText.sortAsc;
+      header.title = `${label} (${directionLabel})`;
+    });
+  }
+
+  function setTableSort(key) {
+    if (!key) return;
+    if (state.tableSort?.key === key) {
+      state.tableSort.dir = state.tableSort.dir === "asc" ? "desc" : "asc";
+    } else {
+      state.tableSort = { key, dir: "asc" };
+    }
+    updateTableSortHeaders();
+    saveUiPrefs();
+    renderTable();
+  }
+
+  function bindTableSorting() {
+    const headers = document.querySelectorAll("th.history-sortable[data-sort-key]");
+    headers.forEach((header) => {
+      if (!header.dataset.sortLabel) {
+        const labelNode = header.childNodes[0];
+        header.dataset.sortLabel = (labelNode && labelNode.textContent ? labelNode.textContent : header.textContent).trim();
+      }
+      header.addEventListener("click", () => setTableSort(header.dataset.sortKey));
+      header.setAttribute("tabindex", "0");
+      header.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setTableSort(header.dataset.sortKey);
+        }
+      });
+    });
+    updateTableSortHeaders();
+  }
+
+  function getFilteredEntries() {
+    const entries = state.payload.entries || [];
+    const searchInput = qs("searchQuery");
+    const sourceFilter = qs("sourceFilter");
+    const onlyChanges = qs("onlyChanges");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    const source = sourceFilter ? sourceFilter.value : "";
+    const changesOnly = onlyChanges ? onlyChanges.checked : false;
+    const filtered = entries.filter((item) => {
+      const text = [item.display_value, item.previous_display_value, item.transition, item.source, item.added].join(" ").toLowerCase();
+      if (query && !text.includes(query)) return false;
+      if (source && item.source !== source) return false;
+      if (changesOnly && !item.changed) return false;
+      return true;
+    });
+    state.filteredEntries = sortEntries(filtered);
+    return state.filteredEntries;
+  }
+
+  function renderTable() {
+    const body = qs("historyTableBody");
+    if (!body) return;
+    updateTableSortHeaders();
+    const rows = getFilteredEntries();
+    body.innerHTML = rows.map((item) => `
+      <tr>
+        <td>${formatDate(item.added)}</td>
+        <td><span class="badge text-bg-secondary">${item.source || historyText.unknown}</span></td>
+        <td class="history-transition">${item.transition || item.display_value}</td>
+        <td>${item.delta_display || "-"}</td>
+        <td>${item.duration_label || "-"}</td>
+        <td>${item.changed_for_label || "-"}</td>
+        <td>
+          ${item.id ? `<a href="?op=delete&id=${item.id}&object={{object.id}}&name={{name}}" onclick="return confirm('{{ _('Are you sure?') }}')" class="btn btn-sm btn-danger">{{ _('Delete') }}</a>` : ""}
+        </td>
+      </tr>
+    `).join("") || `<tr><td colspan="7" class="text-center text-muted">{{ _('No data available') }}</td></tr>`;
+  }
+
+  function buildMovingAverageSeries(data, windowSize = 10) {
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const result = [];
+    let rollingSum = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      const point = data[i];
+      const value = Array.isArray(point) ? Number(point[1]) : NaN;
+      if (!Number.isFinite(value)) continue;
+      rollingSum += value;
+      if (i >= windowSize) {
+        const oldPoint = data[i - windowSize];
+        const oldValue = Array.isArray(oldPoint) ? Number(oldPoint[1]) : NaN;
+        if (Number.isFinite(oldValue)) rollingSum -= oldValue;
+      }
+      const count = Math.min(i + 1, windowSize);
+      result.push([point[0], Number((rollingSum / count).toFixed(4))]);
+    }
+    return result;
+  }
+
+  function buildDeltaSeries(data) {
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const result = [];
+    for (let i = 1; i < data.length; i += 1) {
+      const current = data[i];
+      const previous = data[i - 1];
+      const currentValue = Array.isArray(current) ? Number(current[1]) : NaN;
+      const previousValue = Array.isArray(previous) ? Number(previous[1]) : NaN;
+      if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue)) continue;
+      result.push([current[0], Number((currentValue - previousValue).toFixed(4))]);
+    }
+    return result;
+  }
+
+  function buildTimelineSeries(entries) {
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .filter((entry) => entry && entry.added)
+      .map((entry) => {
+        const ts = new Date(entry.added).getTime();
+        if (!Number.isFinite(ts)) return null;
+        return {
+          x: ts,
+          y: 1,
+          custom: {
+            value: entry.display_value ?? entry.value ?? "-",
+            transition: entry.transition ?? "-",
+            source: entry.source ?? historyText.unknown
+          }
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function getAutoBucketMs(data) {
+    if (!Array.isArray(data) || data.length < 2) return 3600 * 1000;
+    const firstTs = Number(data[0][0]);
+    const lastTs = Number(data[data.length - 1][0]);
+    if (!Number.isFinite(firstTs) || !Number.isFinite(lastTs) || lastTs <= firstTs) return 3600 * 1000;
+    const span = lastTs - firstTs;
+    const raw = Math.floor(span / 60);
+    const minBucket = 5 * 60 * 1000;
+    const maxBucket = 24 * 3600 * 1000;
+    return Math.max(minBucket, Math.min(maxBucket, raw));
+  }
+
+  function buildOhlcSeries(data) {
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const bucketMs = getAutoBucketMs(data);
+    const grouped = new Map();
+    data.forEach((point) => {
+      const ts = Number(point[0]);
+      const val = Number(point[1]);
+      if (!Number.isFinite(ts) || !Number.isFinite(val)) return;
+      const bucketStart = Math.floor(ts / bucketMs) * bucketMs;
+      const bucket = grouped.get(bucketStart);
+      if (!bucket) {
+        grouped.set(bucketStart, { open: val, high: val, low: val, close: val });
+        return;
+      }
+      bucket.high = Math.max(bucket.high, val);
+      bucket.low = Math.min(bucket.low, val);
+      bucket.close = val;
+    });
+    return [...grouped.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([ts, b]) => [ts, b.open, b.high, b.low, b.close]);
+  }
+
+  function buildHistogramData(data, binsCount = 14) {
+    const values = (data || [])
+      .map((item) => Number(item[1]))
+      .filter((value) => Number.isFinite(value));
+    if (!values.length) return { categories: [], counts: [] };
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (min === max) {
+      return { categories: [String(min)], counts: [values.length] };
+    }
+    const bins = Math.max(6, Math.min(24, binsCount));
+    const step = (max - min) / bins;
+    const counts = Array.from({ length: bins }, () => 0);
+    values.forEach((value) => {
+      let idx = Math.floor((value - min) / step);
+      if (idx >= bins) idx = bins - 1;
+      if (idx < 0) idx = 0;
+      counts[idx] += 1;
+    });
+    const categories = counts.map((_, idx) => {
+      const from = min + idx * step;
+      const to = from + step;
+      return `${from.toFixed(2)}..${to.toFixed(2)}`;
+    });
+    return { categories, counts };
+  }
+
+  function buildHeatmapLikeSeries(entries) {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    (entries || []).forEach((entry) => {
+      if (!entry?.added) return;
+      const d = new Date(entry.added);
+      if (Number.isNaN(d.getTime())) return;
+      const day = (d.getDay() + 6) % 7; // Monday=0
+      const hour = d.getHours();
+      grid[day][hour] += 1;
+    });
+    let maxCount = 0;
+    const points = [];
+    for (let day = 0; day < 7; day += 1) {
+      for (let hour = 0; hour < 24; hour += 1) {
+        const count = grid[day][hour];
+        if (count > maxCount) maxCount = count;
+        points.push([hour, day, count]);
+      }
+    }
+    return { points, maxCount };
+  }
+
+  function buildHeatmapValueSeries(entries) {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => ({
+      sum: 0,
+      count: 0,
+      min: Infinity,
+      max: -Infinity
+    })));
+    (entries || []).forEach((entry) => {
+      if (!entry?.added) return;
+      const numericValue = entry.numeric_value ?? parseNumericClient(entry.value ?? entry.display_value);
+      if (numericValue == null) return;
+      const d = new Date(entry.added);
+      if (Number.isNaN(d.getTime())) return;
+      const day = (d.getDay() + 6) % 7; // Monday=0
+      const hour = d.getHours();
+      const cell = grid[day][hour];
+      cell.sum += numericValue;
+      cell.count += 1;
+      if (numericValue < cell.min) cell.min = numericValue;
+      if (numericValue > cell.max) cell.max = numericValue;
+    });
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    const points = [];
+    for (let day = 0; day < 7; day += 1) {
+      for (let hour = 0; hour < 24; hour += 1) {
+        const cell = grid[day][hour];
+        const avg = cell.count ? Number((cell.sum / cell.count).toFixed(4)) : null;
+        if (avg != null) {
+          if (avg < minValue) minValue = avg;
+          if (avg > maxValue) maxValue = avg;
+        }
+        points.push({
+          x: hour,
+          y: day,
+          value: avg,
+          custom: {
+            count: cell.count,
+            sum: cell.count ? Number(cell.sum.toFixed(4)) : null,
+            min: cell.count ? Number(cell.min.toFixed(4)) : null,
+            max: cell.count ? Number(cell.max.toFixed(4)) : null
+          }
+        });
+      }
+    }
+    return {
+      points,
+      hasData: Number.isFinite(minValue) && Number.isFinite(maxValue),
+      minValue: Number.isFinite(minValue) ? minValue : null,
+      maxValue: Number.isFinite(maxValue) ? maxValue : null
+    };
+  }
+
+  function buildMonthlyHeatmapLikeSeries(entries) {
+    const monthGrid = new Map();
+    (entries || []).forEach((entry) => {
+      if (!entry?.added) return;
+      const d = new Date(entry.added);
+      if (Number.isNaN(d.getTime())) return;
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthGrid.has(monthKey)) {
+        monthGrid.set(monthKey, Array.from({ length: 31 }, () => 0));
+      }
+      const dayIndex = d.getDate() - 1;
+      monthGrid.get(monthKey)[dayIndex] += 1;
+    });
+    const monthLabels = [...monthGrid.keys()].sort((a, b) => a.localeCompare(b));
+    let maxCount = 0;
+    const points = [];
+    monthLabels.forEach((monthLabel, monthIndex) => {
+      const days = monthGrid.get(monthLabel) || [];
+      for (let day = 0; day < 31; day += 1) {
+        const count = days[day] || 0;
+        if (count > maxCount) maxCount = count;
+        points.push([day, monthIndex, count]);
+      }
+    });
+    return { points, monthLabels, maxCount };
+  }
+
+  function buildMonthlyHeatmapValueSeries(entries) {
+    const monthGrid = new Map();
+    (entries || []).forEach((entry) => {
+      if (!entry?.added) return;
+      const numericValue = entry.numeric_value ?? parseNumericClient(entry.value ?? entry.display_value);
+      if (numericValue == null) return;
+      const d = new Date(entry.added);
+      if (Number.isNaN(d.getTime())) return;
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthGrid.has(monthKey)) {
+        monthGrid.set(monthKey, Array.from({ length: 31 }, () => ({
+          sum: 0,
+          count: 0,
+          min: Infinity,
+          max: -Infinity
+        })));
+      }
+      const dayIndex = d.getDate() - 1;
+      const cell = monthGrid.get(monthKey)[dayIndex];
+      cell.sum += numericValue;
+      cell.count += 1;
+      if (numericValue < cell.min) cell.min = numericValue;
+      if (numericValue > cell.max) cell.max = numericValue;
+    });
+    const monthLabels = [...monthGrid.keys()].sort((a, b) => a.localeCompare(b));
+    let minValue = Infinity;
+    let maxValue = -Infinity;
+    const points = [];
+    monthLabels.forEach((monthLabel, monthIndex) => {
+      const cells = monthGrid.get(monthLabel) || [];
+      for (let day = 0; day < 31; day += 1) {
+        const cell = cells[day];
+        const avg = cell?.count ? Number((cell.sum / cell.count).toFixed(4)) : null;
+        if (avg != null) {
+          if (avg < minValue) minValue = avg;
+          if (avg > maxValue) maxValue = avg;
+        }
+        points.push({
+          x: day,
+          y: monthIndex,
+          value: avg,
+          custom: {
+            count: cell?.count || 0,
+            min: cell?.count ? Number(cell.min.toFixed(4)) : null,
+            max: cell?.count ? Number(cell.max.toFixed(4)) : null
+          }
+        });
+      }
+    });
+    return {
+      points,
+      monthLabels,
+      hasData: Number.isFinite(minValue) && Number.isFinite(maxValue),
+      minValue: Number.isFinite(minValue) ? minValue : null,
+      maxValue: Number.isFinite(maxValue) ? maxValue : null
+    };
+  }
+
+  function buildHourlyAverageProfile(data) {
+    const sums = Array.from({ length: 24 }, () => 0);
+    const counts = Array.from({ length: 24 }, () => 0);
+    (data || []).forEach((point) => {
+      const ts = Number(point[0]);
+      const val = Number(point[1]);
+      if (!Number.isFinite(ts) || !Number.isFinite(val)) return;
+      const hour = new Date(ts).getHours();
+      sums[hour] += val;
+      counts[hour] += 1;
+    });
+    return Array.from({ length: 24 }, (_, hour) => counts[hour] ? Number((sums[hour] / counts[hour]).toFixed(4)) : null);
+  }
+
+  function buildProgressStats(data) {
+    const values = (data || []).map((item) => Number(item[1])).filter((value) => Number.isFinite(value));
+    if (!values.length) return null;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const current = values[values.length - 1];
+    const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
+    return { min, max, current, avg };
+  }
+
+  function getThemeBrightness(hexColor) {
+    if (!hexColor || typeof hexColor !== "string") return 255;
+    const hex = hexColor.trim();
+    const full = hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+      : hex;
+    const match = /^#([0-9a-f]{6})$/i.exec(full);
+    if (!match) return 255;
+    const value = match[1];
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return (0.299 * r) + (0.587 * g) + (0.114 * b);
+  }
+
+  function getHeatmapPaletteStops(palette, isLightTheme) {
+    const normalized = String(palette || "classic").toLowerCase();
+    if (normalized === "soft") {
+      return isLightTheme
+        ? [[0, "#f8fafc"], [0.25, "#e9effd"], [0.5, "#c9d8fb"], [0.75, "#9db8f4"], [1, "#6f8fdb"]]
+        : [[0, "#1d2438"], [0.25, "#25304a"], [0.5, "#33466e"], [0.75, "#48659b"], [1, "#6d92d1"]];
+    }
+    if (normalized === "contrast") {
+      return isLightTheme
+        ? [[0, "#f7f7ff"], [0.25, "#b9cbff"], [0.5, "#6f98ff"], [0.75, "#2f6cff"], [1, "#0037c8"]]
+        : [[0, "#121a2e"], [0.25, "#1f2f59"], [0.5, "#2c4fa3"], [0.75, "#3f76e5"], [1, "#7fb3ff"]];
+    }
+    if (normalized === "ocean") {
+      return isLightTheme
+        ? [[0, "#f2fbff"], [0.25, "#cfeefe"], [0.5, "#8dd9f8"], [0.75, "#3abfe6"], [1, "#0d87bd"]]
+        : [[0, "#102633"], [0.25, "#164257"], [0.5, "#1f6584"], [0.75, "#2d91b5"], [1, "#62c8ee"]];
+    }
+    if (normalized === "sunset") {
+      return isLightTheme
+        ? [[0, "#fff6ef"], [0.25, "#ffd8bd"], [0.5, "#ffb380"], [0.75, "#ff7e5f"], [1, "#d94841"]]
+        : [[0, "#35211d"], [0.25, "#5a2d26"], [0.5, "#8a4031"], [0.75, "#be5b46"], [1, "#ff9872"]];
+    }
+    if (normalized === "forest") {
+      return isLightTheme
+        ? [[0, "#f2fbf5"], [0.25, "#d4f0dc"], [0.5, "#9ed7af"], [0.75, "#5faf7a"], [1, "#2d7d53"]]
+        : [[0, "#1b2a21"], [0.25, "#24402f"], [0.5, "#316247"], [0.75, "#44845f"], [1, "#76bf91"]];
+    }
+    if (normalized === "fire") {
+      return isLightTheme
+        ? [[0, "#fff7ef"], [0.25, "#ffe0bf"], [0.5, "#ffb36b"], [0.75, "#ff7d32"], [1, "#d73617"]]
+        : [[0, "#2f1f1b"], [0.25, "#4d2a21"], [0.5, "#7a3b26"], [0.75, "#b95624"], [1, "#ff8f46"]];
+    }
+    if (normalized === "mono") {
+      return isLightTheme
+        ? [[0, "#f7f8fa"], [0.25, "#e0e4ea"], [0.5, "#b5bdc9"], [0.75, "#7f8a9c"], [1, "#495368"]]
+        : [[0, "#1c212b"], [0.25, "#2c3340"], [0.5, "#414d60"], [0.75, "#64748b"], [1, "#9aa8bd"]];
+    }
+    if (normalized === "neon") {
+      return isLightTheme
+        ? [[0, "#f4faff"], [0.25, "#d1efff"], [0.5, "#7dd8ff"], [0.75, "#2ab3ff"], [1, "#006de6"]]
+        : [[0, "#0d1d33"], [0.25, "#11335c"], [0.5, "#14548e"], [0.75, "#1a7dd1"], [1, "#5cd6ff"]];
+    }
+    if (normalized === "tempdiv") {
+      return isLightTheme
+        ? [[0, "#d84b4b"], [0.48, "#f8dada"], [0.5, "#f3f4f6"], [0.52, "#d7f2df"], [1, "#2f9e44"]]
+        : [[0, "#ff7777"], [0.48, "#5b2f2f"], [0.5, "#2b3444"], [0.52, "#274835"], [1, "#61d17f"]];
+    }
+    if (normalized === "tempsmooth") {
+      return isLightTheme
+        ? [[0, "#e79292"], [0.35, "#f2caca"], [0.5, "#f3f4f6"], [0.65, "#cfe9d6"], [1, "#7dc791"]]
+        : [[0, "#d67f7f"], [0.35, "#6a4545"], [0.5, "#313d52"], [0.65, "#3e5b47"], [1, "#7dc791"]];
+    }
+    if (normalized === "aurora") {
+      return isLightTheme
+        ? [[0, "#eefbff"], [0.25, "#d4f3ff"], [0.5, "#b4e5ff"], [0.75, "#9ad6f7"], [1, "#7bb8f0"]]
+        : [[0, "#162436"], [0.25, "#1e3a57"], [0.5, "#27577f"], [0.75, "#3773a7"], [1, "#57a1d9"]];
+    }
+    if (normalized === "desert") {
+      return isLightTheme
+        ? [[0, "#fff8ef"], [0.25, "#fbe5ca"], [0.5, "#f2c896"], [0.75, "#ddab6a"], [1, "#ba8646"]]
+        : [[0, "#33261b"], [0.25, "#4f3721"], [0.5, "#734e2b"], [0.75, "#9c6938"], [1, "#c38f58"]];
+    }
+    if (normalized === "vintage") {
+      return isLightTheme
+        ? [[0, "#f8f4ed"], [0.25, "#e7decf"], [0.5, "#d2c1a8"], [0.75, "#b79f7c"], [1, "#8f7758"]]
+        : [[0, "#2b241f"], [0.25, "#40352c"], [0.5, "#5a4a3c"], [0.75, "#79644f"], [1, "#a08468"]];
+    }
+    if (normalized === "ice") {
+      return isLightTheme
+        ? [[0, "#f2fbff"], [0.25, "#d9f2ff"], [0.5, "#b3e6ff"], [0.75, "#7fd2f7"], [1, "#43b8e8"]]
+        : [[0, "#11242f"], [0.25, "#1a3a4a"], [0.5, "#245a70"], [0.75, "#2f7e99"], [1, "#4eb0d1"]];
+    }
+    if (normalized === "berry") {
+      return isLightTheme
+        ? [[0, "#fff3fa"], [0.25, "#ffd9ef"], [0.5, "#ffb4dc"], [0.75, "#e98ec3"], [1, "#c55ca2"]]
+        : [[0, "#331a2d"], [0.25, "#4d2342"], [0.5, "#70305f"], [0.75, "#954482"], [1, "#c06db0"]];
+    }
+    if (normalized === "mint") {
+      return isLightTheme
+        ? [[0, "#f2fff9"], [0.25, "#d8f7ea"], [0.5, "#b1ecd3"], [0.75, "#7ed7b4"], [1, "#45b58b"]]
+        : [[0, "#162a22"], [0.25, "#1f3f33"], [0.5, "#2a5e4a"], [0.75, "#378167"], [1, "#55b28e"]];
+    }
+    if (normalized === "preset_temperature") {
+      return isLightTheme
+        ? [[0, "#2f6ed8"], [0.35, "#9fc2ff"], [0.5, "#f3f4f6"], [0.65, "#ffc8a1"], [1, "#d84b3f"]]
+        : [[0, "#4d85e6"], [0.35, "#6f9ee8"], [0.5, "#2e374a"], [0.65, "#c7855a"], [1, "#ef6f61"]];
+    }
+    if (normalized === "preset_humidity") {
+      return isLightTheme
+        ? [[0, "#d5a45c"], [0.35, "#e7d38f"], [0.55, "#7fbe7f"], [0.75, "#58a7b7"], [1, "#2d74b8"]]
+        : [[0, "#b58f5e"], [0.35, "#8d8a5a"], [0.55, "#5c9960"], [0.75, "#447f8a"], [1, "#3d7dc2"]];
+    }
+    if (normalized === "preset_power") {
+      return isLightTheme
+        ? [[0, "#55b07a"], [0.35, "#9ac76a"], [0.6, "#e0b84e"], [0.8, "#de8242"], [1, "#c43838"]]
+        : [[0, "#4a9b6c"], [0.35, "#7ca85b"], [0.6, "#b08f45"], [0.8, "#bc6b3a"], [1, "#d95353"]];
+    }
+    if (normalized === "preset_co2") {
+      return isLightTheme
+        ? [[0, "#4fae66"], [0.45, "#93c86d"], [0.7, "#ddb84d"], [0.85, "#d78042"], [1, "#a3384d"]]
+        : [[0, "#59b971"], [0.45, "#7fb45f"], [0.7, "#b08e46"], [0.85, "#b8643e"], [1, "#c65a75"]];
+    }
+    if (normalized === "preset_activity") {
+      return isLightTheme
+        ? [[0, "#eef2f7"], [0.4, "#c5d3e6"], [0.65, "#89a8d6"], [0.85, "#4f7fc5"], [1, "#1e56a8"]]
+        : [[0, "#243044"], [0.4, "#30435f"], [0.65, "#406092"], [0.85, "#4e7dc2"], [1, "#75a7f0"]];
+    }
+    return isLightTheme
+      ? [[0, "#f5f7ff"], [0.25, "#dbe4ff"], [0.5, "#adc4ff"], [0.75, "#5d87ff"], [1, "#1e4ed8"]]
+      : [[0, "#1d2438"], [0.25, "#2b3d66"], [0.5, "#385ea6"], [0.75, "#4e88e0"], [1, "#88b3ff"]];
+  }
+
+  function getChartPaletteOverrides(palette, isLightTheme) {
+    const normalized = String(palette || "classic").toLowerCase();
+    if (normalized === "soft") {
+      return {
+        primary: isLightTheme ? "#5f7ed8" : "#7ea0ff",
+        secondary: isLightTheme ? "#95a4c7" : "#8fa3c8",
+        info: isLightTheme ? "#85aee6" : "#6f95d3",
+        success: isLightTheme ? "#6ea894" : "#72bca4",
+        warning: isLightTheme ? "#d6a96d" : "#dcb47a",
+        danger: isLightTheme ? "#c78585" : "#d08c8c"
+      };
+    }
+    if (normalized === "contrast") {
+      return {
+        primary: isLightTheme ? "#0046d5" : "#78acff",
+        secondary: isLightTheme ? "#5f6b80" : "#9eabc6",
+        info: isLightTheme ? "#0077ff" : "#42a0ff",
+        success: isLightTheme ? "#0c8f54" : "#37bf7d",
+        warning: isLightTheme ? "#d08a00" : "#f0b138",
+        danger: isLightTheme ? "#c7253e" : "#ff6b7c"
+      };
+    }
+    if (normalized === "ocean") {
+      return {
+        primary: isLightTheme ? "#0f8fc9" : "#69cef2",
+        secondary: isLightTheme ? "#4f7c99" : "#8fb6cf",
+        info: isLightTheme ? "#1ea8dd" : "#65d4ff",
+        success: isLightTheme ? "#1f9d8f" : "#47c7b9",
+        warning: isLightTheme ? "#db8a32" : "#f0b56b",
+        danger: isLightTheme ? "#d14e66" : "#ff7d95"
+      };
+    }
+    if (normalized === "sunset") {
+      return {
+        primary: isLightTheme ? "#ef6c57" : "#ff9b7d",
+        secondary: isLightTheme ? "#8a6d63" : "#b79f97",
+        info: isLightTheme ? "#ff8f6b" : "#ffb09a",
+        success: isLightTheme ? "#c07a3d" : "#dda16b",
+        warning: isLightTheme ? "#d14b2a" : "#ff815e",
+        danger: isLightTheme ? "#b9313b" : "#ff6d7e"
+      };
+    }
+    if (normalized === "forest") {
+      return {
+        primary: isLightTheme ? "#2f8a5c" : "#72c998",
+        secondary: isLightTheme ? "#5c7667" : "#99b8a6",
+        info: isLightTheme ? "#3a9f72" : "#7ed4ab",
+        success: isLightTheme ? "#1e7f4c" : "#63c68f",
+        warning: isLightTheme ? "#b58d3d" : "#d6ae60",
+        danger: isLightTheme ? "#c24d57" : "#f07c87"
+      };
+    }
+    if (normalized === "fire") {
+      return {
+        primary: isLightTheme ? "#ea5b2a" : "#ff9558",
+        secondary: isLightTheme ? "#8e685d" : "#c0a19a",
+        info: isLightTheme ? "#f07931" : "#ffb36e",
+        success: isLightTheme ? "#c76729" : "#e98f50",
+        warning: isLightTheme ? "#d93a1b" : "#ff704b",
+        danger: isLightTheme ? "#b22421" : "#ff5c5c"
+      };
+    }
+    if (normalized === "mono") {
+      return {
+        primary: isLightTheme ? "#505a70" : "#98a7bd",
+        secondary: isLightTheme ? "#7a8394" : "#aab3c2",
+        info: isLightTheme ? "#626d84" : "#b1c0d8",
+        success: isLightTheme ? "#5e6674" : "#98a2b3",
+        warning: isLightTheme ? "#7c7468" : "#b9ae9f",
+        danger: isLightTheme ? "#7c5252" : "#bd8787"
+      };
+    }
+    if (normalized === "neon") {
+      return {
+        primary: isLightTheme ? "#0077ff" : "#54b6ff",
+        secondary: isLightTheme ? "#55668a" : "#9fb0d7",
+        info: isLightTheme ? "#00a9ff" : "#68deff",
+        success: isLightTheme ? "#00a57a" : "#5ce4b4",
+        warning: isLightTheme ? "#ff7f11" : "#ffb04b",
+        danger: isLightTheme ? "#ff2f6d" : "#ff74a2"
+      };
+    }
+    if (normalized === "tempdiv") {
+      return {
+        primary: isLightTheme ? "#2f9e44" : "#61d17f",
+        secondary: isLightTheme ? "#6f7f93" : "#9fb0c2",
+        info: isLightTheme ? "#4fba61" : "#7fe297",
+        success: isLightTheme ? "#2f9e44" : "#61d17f",
+        warning: isLightTheme ? "#d6a45f" : "#e5bd7f",
+        danger: isLightTheme ? "#d84b4b" : "#ff7777"
+      };
+    }
+    if (normalized === "tempsmooth") {
+      return {
+        primary: isLightTheme ? "#5aaa6d" : "#7dc791",
+        secondary: isLightTheme ? "#7b899c" : "#a5b1c2",
+        info: isLightTheme ? "#76ba86" : "#96d3a6",
+        success: isLightTheme ? "#5aaa6d" : "#7dc791",
+        warning: isLightTheme ? "#d0ae7a" : "#dfc396",
+        danger: isLightTheme ? "#d97f7f" : "#e79a9a"
+      };
+    }
+    if (normalized === "aurora") {
+      return {
+        primary: isLightTheme ? "#4b9bd6" : "#79c2ff",
+        secondary: isLightTheme ? "#6e83a6" : "#a4b7d6",
+        info: isLightTheme ? "#63b8d9" : "#8ad7f0",
+        success: isLightTheme ? "#45a87b" : "#75d1a7",
+        warning: isLightTheme ? "#c99d58" : "#dfba7a",
+        danger: isLightTheme ? "#c05d7f" : "#e892ad"
+      };
+    }
+    if (normalized === "desert") {
+      return {
+        primary: isLightTheme ? "#be8a4a" : "#d6a56a",
+        secondary: isLightTheme ? "#8a7562" : "#b79f8b",
+        info: isLightTheme ? "#d19b5e" : "#e6ba86",
+        success: isLightTheme ? "#8b9a5c" : "#aebf77",
+        warning: isLightTheme ? "#cc7e3f" : "#e5a164",
+        danger: isLightTheme ? "#b55a4c" : "#d68a80"
+      };
+    }
+    if (normalized === "vintage") {
+      return {
+        primary: isLightTheme ? "#8e7758" : "#b39a77",
+        secondary: isLightTheme ? "#7d7468" : "#a99e90",
+        info: isLightTheme ? "#9d8a6f" : "#c0ad90",
+        success: isLightTheme ? "#6f8a63" : "#93af86",
+        warning: isLightTheme ? "#b08b54" : "#cfa876",
+        danger: isLightTheme ? "#a46565" : "#c78b8b"
+      };
+    }
+    if (normalized === "ice") {
+      return {
+        primary: isLightTheme ? "#3ea8d8" : "#74ccef",
+        secondary: isLightTheme ? "#6a8899" : "#9bb8c9",
+        info: isLightTheme ? "#5cc0e6" : "#8bdef7",
+        success: isLightTheme ? "#53a8a0" : "#81cec6",
+        warning: isLightTheme ? "#d0a660" : "#e4c188",
+        danger: isLightTheme ? "#bf6f7f" : "#df98a7"
+      };
+    }
+    if (normalized === "berry") {
+      return {
+        primary: isLightTheme ? "#b85f9f" : "#d98bc6",
+        secondary: isLightTheme ? "#7c6d85" : "#a99ab2",
+        info: isLightTheme ? "#cc79b3" : "#e3a0d0",
+        success: isLightTheme ? "#7ba06f" : "#a4c49a",
+        warning: isLightTheme ? "#ce8a52" : "#e6ad79",
+        danger: isLightTheme ? "#a04c72" : "#c980a1"
+      };
+    }
+    if (normalized === "mint") {
+      return {
+        primary: isLightTheme ? "#45b58b" : "#78d2af",
+        secondary: isLightTheme ? "#6f8f86" : "#9fbdb5",
+        info: isLightTheme ? "#63c9a2" : "#95e0c4",
+        success: isLightTheme ? "#3ea078" : "#6ec69b",
+        warning: isLightTheme ? "#c39e5f" : "#ddb984",
+        danger: isLightTheme ? "#bd6d79" : "#dda0aa"
+      };
+    }
+    if (normalized === "preset_temperature") {
+      return {
+        primary: isLightTheme ? "#d85b48" : "#ef7a69",
+        secondary: isLightTheme ? "#6e7f98" : "#9db0ca",
+        info: isLightTheme ? "#4f88d6" : "#72a7f1",
+        success: isLightTheme ? "#2f93c4" : "#68bce6",
+        warning: isLightTheme ? "#d9a15b" : "#e1b57b",
+        danger: isLightTheme ? "#d84b3f" : "#ef6f61"
+      };
+    }
+    if (normalized === "preset_humidity") {
+      return {
+        primary: isLightTheme ? "#4f9dbe" : "#79bfd9",
+        secondary: isLightTheme ? "#6e7f8a" : "#9cb0bd",
+        info: isLightTheme ? "#2d74b8" : "#5f9ee0",
+        success: isLightTheme ? "#5ea66a" : "#87c490",
+        warning: isLightTheme ? "#d0ad64" : "#dfc082",
+        danger: isLightTheme ? "#b66b54" : "#d2947f"
+      };
+    }
+    if (normalized === "preset_power") {
+      return {
+        primary: isLightTheme ? "#d06f35" : "#e49358",
+        secondary: isLightTheme ? "#6f7888" : "#9ea9bc",
+        info: isLightTheme ? "#7ba65d" : "#a2ca85",
+        success: isLightTheme ? "#4b9f6b" : "#78c391",
+        warning: isLightTheme ? "#d4a343" : "#e2bd69",
+        danger: isLightTheme ? "#c43838" : "#d85a5a"
+      };
+    }
+    if (normalized === "preset_co2") {
+      return {
+        primary: isLightTheme ? "#c97037" : "#dd8f5b",
+        secondary: isLightTheme ? "#6f7686" : "#9ca6b9",
+        info: isLightTheme ? "#a84a5f" : "#c9708a",
+        success: isLightTheme ? "#4fae66" : "#7ac28b",
+        warning: isLightTheme ? "#cfa742" : "#debd6a",
+        danger: isLightTheme ? "#a3384d" : "#c65a75"
+      };
+    }
+    if (normalized === "preset_activity") {
+      return {
+        primary: isLightTheme ? "#2f66c2" : "#6f9ee0",
+        secondary: isLightTheme ? "#6f7c93" : "#9dabbe",
+        info: isLightTheme ? "#4f7fc5" : "#7ea8e6",
+        success: isLightTheme ? "#3f8f9f" : "#6fbbcb",
+        warning: isLightTheme ? "#c49a58" : "#d9b57e",
+        danger: isLightTheme ? "#7d5aa8" : "#a384ca"
+      };
+    }
+    return {};
+  }
+
+  function isTemperatureDivergingPalette(palette) {
+    const normalized = String(palette || "").toLowerCase();
+    return normalized === "tempdiv" || normalized === "tempsmooth";
+  }
+
+  function getTemperatureSeriesZones(isLightTheme) {
+    return [
+      { value: 0, color: isLightTheme ? "#d84b4b" : "#ff7777" },
+      { color: isLightTheme ? "#2f9e44" : "#61d17f" }
+    ];
+  }
+
+  function getTemperatureZeroLine(isLightTheme) {
+    return [{
+      value: 0,
+      color: isLightTheme ? "#6c757d" : "#97a2b2",
+      width: 1,
+      dashStyle: "ShortDot",
+      zIndex: 3
+    }];
+  }
+
+  function getHeatmapColorAxisLabelStyle(isLightTheme) {
+    return {
+      color: isLightTheme ? "#334155" : "#dbe7ff",
+      textOutline: isLightTheme ? "none" : "0.8px #0f172a",
+      fontWeight: isLightTheme ? "500" : "600"
+    };
+  }
+
+  function isContextPresetPalette(palette) {
+    return String(palette || "").toLowerCase().startsWith("preset_");
+  }
+
+  function toRgba(hexColor, alpha) {
+    if (!hexColor || typeof hexColor !== "string") return `rgba(0, 0, 0, ${alpha})`;
+    const hex = hexColor.trim();
+    const full = hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+      : hex;
+    const match = /^#([0-9a-f]{6})$/i.exec(full);
+    if (!match) return `rgba(0, 0, 0, ${alpha})`;
+    const value = match[1];
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  function buildPresetVisuals(palette, numericData, c, isLightTheme) {
+    const normalized = String(palette || "").toLowerCase();
+    if (!normalized.startsWith("preset_")) return null;
+    const points = (numericData || []).filter((item) => Number.isFinite(Number(item[1])));
+    if (!points.length) return null;
+    const values = points.map((item) => Number(item[1]));
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const p50 = percentile(values, 0.5);
+    const p80 = percentile(values, 0.8);
+    const p95 = percentile(values, 0.95);
+    const safe = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+    const cfg = {
+      zones: [],
+      plotBands: [],
+      plotLines: [],
+      extraSeries: []
+    };
+    const addLine = (value, color) => {
+      if (!Number.isFinite(value)) return;
+      cfg.plotLines.push({
+        value,
+        color,
+        width: 1,
+        dashStyle: "ShortDash",
+        zIndex: 3
+      });
+    };
+    const addBand = (from, to, color, alpha) => {
+      if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return;
+      cfg.plotBands.push({
+        from,
+        to,
+        color: toRgba(color, alpha)
+      });
+    };
+
+    if (normalized === "preset_temperature") {
+      const freeze = 0;
+      const comfortLow = 18;
+      const comfortHigh = 26;
+      const warmHigh = 30;
+      cfg.zones = [
+        { value: freeze, color: c.danger },
+        { value: comfortLow, color: c.info },
+        { value: comfortHigh, color: c.success },
+        { value: warmHigh, color: c.warning },
+        { color: c.danger }
+      ];
+      addLine(freeze, c.danger);
+      addLine(comfortLow, c.success);
+      addLine(comfortHigh, c.success);
+      addLine(warmHigh, c.warning);
+      addBand(Math.min(minValue, freeze), freeze, c.danger, 0.08);
+      addBand(comfortLow, comfortHigh, c.success, 0.06);
+      addBand(warmHigh, Math.max(maxValue, warmHigh), c.danger, 0.08);
+    } else if (normalized === "preset_humidity") {
+      const low = 30;
+      const comfortHigh = 60;
+      const highWarn = 70;
+      cfg.zones = [
+        { value: low, color: c.warning },
+        { value: comfortHigh, color: c.success },
+        { value: highWarn, color: c.info },
+        { color: c.danger }
+      ];
+      addLine(low, c.warning);
+      addLine(comfortHigh, c.success);
+      addLine(highWarn, c.danger);
+      addBand(Math.min(minValue, low), low, c.warning, 0.08);
+      addBand(low, comfortHigh, c.success, 0.06);
+      addBand(highWarn, Math.max(maxValue, highWarn), c.danger, 0.08);
+    } else if (normalized === "preset_co2") {
+      const warn = 800;
+      const critical = 1000;
+      cfg.zones = [
+        { value: warn, color: c.success },
+        { value: critical, color: c.warning },
+        { color: c.danger }
+      ];
+      addLine(warn, c.warning);
+      addLine(critical, c.danger);
+      addBand(Math.min(minValue, warn), warn, c.success, 0.05);
+      addBand(warn, critical, c.warning, 0.08);
+      addBand(critical, Math.max(maxValue, critical), c.danger, 0.1);
+    } else if (normalized === "preset_power" || normalized === "preset_activity") {
+      const warn = safe(p80, safe(p50, maxValue));
+      const critical = safe(p95, warn);
+      cfg.zones = [
+        { value: warn, color: c.success },
+        { value: critical, color: c.warning },
+        { color: c.danger }
+      ];
+      addLine(warn, c.warning);
+      addLine(critical, c.danger);
+      addBand(minValue, warn, c.success, 0.05);
+      addBand(warn, critical, c.warning, 0.08);
+      addBand(critical, maxValue, c.danger, 0.1);
+    }
+
+    const minPoint = points.reduce((best, item) => Number(item[1]) < Number(best[1]) ? item : best, points[0]);
+    const maxPoint = points.reduce((best, item) => Number(item[1]) > Number(best[1]) ? item : best, points[0]);
+    cfg.extraSeries.push({
+      name: historyText.behaviorMin,
+      type: "scatter",
+      data: [[Number(minPoint[0]), Number(minPoint[1])]],
+      color: c.info,
+      marker: {
+        symbol: "triangle-down",
+        radius: 5,
+        lineWidth: 1,
+        lineColor: isLightTheme ? "#ffffff" : "#0f172a"
+      },
+      tooltip: { valueDecimals: 4 }
+    });
+    cfg.extraSeries.push({
+      name: historyText.behaviorMax,
+      type: "scatter",
+      data: [[Number(maxPoint[0]), Number(maxPoint[1])]],
+      color: c.danger,
+      marker: {
+        symbol: "triangle",
+        radius: 5,
+        lineWidth: 1,
+        lineColor: isLightTheme ? "#ffffff" : "#0f172a"
+      },
+      tooltip: { valueDecimals: 4 }
+    });
+    return cfg;
+  }
+
+  function buildMainChartOptions(targetId, compact) {
+    const mode = getEffectiveMode();
+    const selectedChartType = qs("chartType").value;
+    const seriesData = state.payload.series || {};
+    const entries = state.payload.entries || [];
+    const isLightTheme = getThemeBrightness(getThemeColors().bg) > 170;
+    const selectedPalette = qs("chartPalette")?.value || state.uiPrefs?.chartPalette || "classic";
+    const c = {
+      ...getThemeColors(),
+      ...getChartPaletteOverrides(selectedPalette, isLightTheme)
+    };
+    const chartTypeLabelMap = chartI18n.typeLabels;
+    const isStepMode = selectedChartType === "step" || selectedChartType === "steparea";
+    const seriesType = selectedChartType === "step"
+      ? "line"
+      : selectedChartType === "steparea"
+        ? "area"
+        : selectedChartType;
+    const seriesStep = isStepMode ? "left" : undefined;
+    let chartOptions;
+    let caption = "";
+
+    if (selectedChartType === "timeline") {
+      const timelineData = buildTimelineSeries(entries);
+      chartOptions = {
+        chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+        title: { text: state.payload.property_label },
+        xAxis: { type: "datetime" },
+        yAxis: {
+          min: 0,
+          max: 2,
+          tickPositions: [1],
+          title: { text: historyText.timelineEvents },
+          labels: { formatter: function () { return this.value === 1 ? historyText.timelineChange : ""; } }
+        },
+        tooltip: {
+          useHTML: true,
+          formatter: function () {
+            const custom = this.point.custom || {};
+            return `<b>${formatDate(this.x)}</b><br>${historyText.timelineTransition}: ${custom.transition || "-"}<br>${historyText.timelineValue}: ${custom.value || "-"}<br>${historyText.timelineSource}: ${custom.source || "-"}`;
+          }
+        },
+        plotOptions: { scatter: { marker: { radius: 4, symbol: "circle" } } },
+        series: [{
+          name: historyText.timelineEvents,
+          type: "scatter",
+          data: timelineData
+        }],
+        navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+        rangeSelector: { enabled: !compact, inputEnabled: false }
+      };
+      caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+      return { chartOptions, caption, mode };
+    }
+
+    if (selectedChartType === "heatmapmonth") {
+      const heatmap = buildMonthlyHeatmapLikeSeries(entries);
+      const heatmapStops = getHeatmapPaletteStops(selectedPalette, isLightTheme);
+      const cellBorderColor = isLightTheme ? "#d4def7" : "#34415e";
+      const monthCategories = heatmap.monthLabels.length ? heatmap.monthLabels : [""];
+      chartOptions = {
+        chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+        title: { text: state.payload.property_label },
+        xAxis: {
+          categories: Array.from({ length: 31 }, (_, i) => `${i + 1}`),
+          title: { text: historyText.heatmapDayOfMonth },
+          labels: { style: { color: c.text } }
+        },
+        yAxis: {
+          categories: monthCategories,
+          title: { text: historyText.heatmapMonth },
+          reversed: true,
+          labels: { style: { color: c.text } }
+        },
+        colorAxis: {
+          min: 0,
+          max: Math.max(1, heatmap.maxCount),
+          stops: heatmapStops,
+          labels: { style: getHeatmapColorAxisLabelStyle(isLightTheme) }
+        },
+        plotOptions: { heatmap: { borderWidth: 1, borderColor: cellBorderColor, turboThreshold: 0 } },
+        legend: {
+          itemStyle: { color: c.text },
+          itemHoverStyle: { color: c.text }
+        },
+        tooltip: {
+          pointFormatter: function () {
+            const monthLabel = monthCategories[this.y] || "-";
+            return `<b>${monthLabel}, ${this.x + 1}</b><br>${historyText.heatmapChanges}: <b>${this.value}</b>`;
+          }
+        },
+        series: [{ name: historyText.heatmapMonthlyActivity, type: "heatmap", data: heatmap.points }]
+      };
+      caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+      return { chartOptions, caption, mode, useStock: false };
+    }
+
+    if (mode === "numeric" || mode === "boolean") {
+      const numericData = seriesData.numeric || [];
+      const presetVisuals = mode === "numeric" ? buildPresetVisuals(selectedPalette, numericData, c, isLightTheme) : null;
+      if (selectedChartType === "stepmarkers") {
+        const useTempPalette = mode === "numeric" && isTemperatureDivergingPalette(selectedPalette);
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { type: "datetime" },
+          yAxis: {
+            title: { text: "{{ _('Value') }}" },
+            labels: mode === "boolean" ? { formatter: function () { return this.value === 1 ? "True" : "False"; } } : {},
+            plotLines: [
+              ...(useTempPalette ? getTemperatureZeroLine(isLightTheme) : []),
+              ...((presetVisuals && !useTempPalette) ? presetVisuals.plotLines : [])
+            ],
+            plotBands: (presetVisuals && !useTempPalette) ? presetVisuals.plotBands : []
+          },
+          series: [{
+            name: state.payload.property_label,
+            type: "line",
+            step: "left",
+            marker: { enabled: true, radius: 2.5 },
+            data: numericData,
+            color: c.primary,
+            zoneAxis: useTempPalette ? "y" : undefined,
+            zones: useTempPalette
+              ? getTemperatureSeriesZones(isLightTheme)
+              : (presetVisuals?.zones?.length ? presetVisuals.zones : undefined),
+            tooltip: { valueDecimals: 4 }
+          }].concat((presetVisuals && !useTempPalette) ? presetVisuals.extraSeries : []),
+          navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+          rangeSelector: { enabled: !compact, inputEnabled: false }
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode };
+      }
+
+      if (selectedChartType === "linearea") {
+        const useTempPalette = mode === "numeric" && isTemperatureDivergingPalette(selectedPalette);
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { type: "datetime" },
+          yAxis: {
+            title: { text: "{{ _('Value') }}" },
+            plotLines: [
+              ...(useTempPalette ? getTemperatureZeroLine(isLightTheme) : []),
+              ...((presetVisuals && !useTempPalette) ? presetVisuals.plotLines : [])
+            ],
+            plotBands: (presetVisuals && !useTempPalette) ? presetVisuals.plotBands : []
+          },
+          series: [
+            { name: chartTypeLabelMap.area, type: "area", data: numericData, color: c.info, opacity: 0.2, lineWidth: 0, enableMouseTracking: false },
+            {
+              name: chartTypeLabelMap.line,
+              type: "spline",
+              data: numericData,
+              color: c.primary,
+              lineWidth: 2.2,
+              zoneAxis: useTempPalette ? "y" : undefined,
+              zones: useTempPalette
+                ? getTemperatureSeriesZones(isLightTheme)
+                : (presetVisuals?.zones?.length ? presetVisuals.zones : undefined),
+              tooltip: { valueDecimals: 4 }
+            }
+          ].concat((presetVisuals && !useTempPalette) ? presetVisuals.extraSeries : []),
+          navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+          rangeSelector: { enabled: !compact, inputEnabled: false }
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode };
+      }
+
+      if (selectedChartType === "ohlc") {
+        const ohlcData = buildOhlcSeries(numericData);
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { type: "datetime" },
+          yAxis: { title: { text: "{{ _('Value') }}" } },
+          series: [{ name: "OHLC", type: "ohlc", data: ohlcData }],
+          navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+          rangeSelector: { enabled: !compact, inputEnabled: false }
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode };
+      }
+
+      if (selectedChartType === "histogram") {
+        const histogramSource = numericData
+          .map((item) => Number(item[1]))
+          .filter((value) => Number.isFinite(value));
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { title: { text: historyText.histogramValueAxis } },
+          yAxis: { min: 0, title: { text: historyText.histogramFrequency } },
+          series: [
+            {
+              id: "histogram-source",
+              name: historyText.histogramValues,
+              type: "scatter",
+              data: histogramSource,
+              visible: false,
+              showInLegend: false,
+              enableMouseTracking: false
+            },
+            {
+              name: historyText.histogramDistribution,
+              type: "histogram",
+              baseSeries: "histogram-source",
+              binsNumber: "sturges"
+            }
+          ]
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode, useStock: false };
+      }
+
+      if (selectedChartType === "heatmap24") {
+        const heatmap = buildHeatmapLikeSeries(entries);
+        const dayLabels = [historyText.heatmapMon, historyText.heatmapTue, historyText.heatmapWed, historyText.heatmapThu, historyText.heatmapFri, historyText.heatmapSat, historyText.heatmapSun];
+        const heatmapStops = getHeatmapPaletteStops(selectedPalette, isLightTheme);
+        const cellBorderColor = isLightTheme ? "#d4def7" : "#34415e";
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: {
+            categories: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+            title: { text: historyText.heatmapHours },
+            labels: { style: { color: c.text } }
+          },
+          yAxis: {
+            categories: dayLabels,
+            title: { text: historyText.heatmapWeekday },
+            reversed: true,
+            labels: { style: { color: c.text } }
+          },
+          colorAxis: {
+            min: 0,
+            max: Math.max(1, heatmap.maxCount),
+            stops: heatmapStops,
+            labels: { style: getHeatmapColorAxisLabelStyle(isLightTheme) }
+          },
+          plotOptions: { heatmap: { borderWidth: 1, borderColor: cellBorderColor, turboThreshold: 0 } },
+          legend: {
+            itemStyle: { color: c.text },
+            itemHoverStyle: { color: c.text }
+          },
+          tooltip: {
+            pointFormatter: function () {
+              return `<b>${dayLabels[this.y]}, ${this.x}:00</b><br>${historyText.heatmapChanges}: <b>${this.value}</b>`;
+            }
+          },
+          series: [{ name: historyText.heatmapActivity, type: "heatmap", data: heatmap.points }]
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode, useStock: false };
+      }
+
+      if (selectedChartType === "heatmap24value") {
+        const heatmap = buildHeatmapValueSeries(entries);
+        const dayLabels = [historyText.heatmapMon, historyText.heatmapTue, historyText.heatmapWed, historyText.heatmapThu, historyText.heatmapFri, historyText.heatmapSat, historyText.heatmapSun];
+        const heatmapStops = getHeatmapPaletteStops(selectedPalette, isLightTheme);
+        const useTempPalette = isTemperatureDivergingPalette(selectedPalette);
+        const cellBorderColor = isLightTheme ? "#d4def7" : "#34415e";
+        let colorMin = heatmap.hasData ? heatmap.minValue : 0;
+        let colorMax = heatmap.hasData
+          ? (heatmap.maxValue > heatmap.minValue ? heatmap.maxValue : heatmap.maxValue + 1)
+          : 1;
+        if (useTempPalette && heatmap.hasData) {
+          const absMax = Math.max(Math.abs(heatmap.minValue || 0), Math.abs(heatmap.maxValue || 0), 0.0001);
+          colorMin = -absMax;
+          colorMax = absMax;
+        }
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: {
+            categories: Array.from({ length: 24 }, (_, i) => `${i}:00`),
+            title: { text: historyText.heatmapHours },
+            labels: { style: { color: c.text } }
+          },
+          yAxis: {
+            categories: dayLabels,
+            title: { text: historyText.heatmapWeekday },
+            reversed: true,
+            labels: { style: { color: c.text } }
+          },
+          colorAxis: {
+            min: colorMin,
+            max: colorMax,
+            stops: heatmapStops,
+            labels: { style: getHeatmapColorAxisLabelStyle(isLightTheme) }
+          },
+          plotOptions: { heatmap: { borderWidth: 1, borderColor: cellBorderColor, turboThreshold: 0, nullColor: isLightTheme ? "#eef2ff" : "#212c45" } },
+          legend: {
+            itemStyle: { color: c.text },
+            itemHoverStyle: { color: c.text }
+          },
+          tooltip: {
+            pointFormatter: function () {
+              const count = this.custom?.count || 0;
+              if (!count || this.value == null) {
+                return `<b>${dayLabels[this.y]}, ${this.x}:00</b><br>${historyText.heatmapValue}: <b>${historyText.heatmapNoData}</b>`;
+              }
+              const min = this.custom?.min != null ? this.custom.min : this.value;
+              const max = this.custom?.max != null ? this.custom.max : this.value;
+              return `<b>${dayLabels[this.y]}, ${this.x}:00</b><br>${historyText.heatmapValue}: <b>${this.value}</b><br>${historyText.heatmapPoints}: <b>${count}</b><br>${historyText.summaryMinMax}: <b>${min} / ${max}</b>`;
+            }
+          },
+          series: [{ name: historyText.heatmapValue, type: "heatmap", data: heatmap.points }]
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode, useStock: false };
+      }
+
+      if (selectedChartType === "heatmapmonthvalue") {
+        const heatmap = buildMonthlyHeatmapValueSeries(entries);
+        const heatmapStops = getHeatmapPaletteStops(selectedPalette, isLightTheme);
+        const useTempPalette = isTemperatureDivergingPalette(selectedPalette);
+        const cellBorderColor = isLightTheme ? "#d4def7" : "#34415e";
+        const monthCategories = heatmap.monthLabels.length ? heatmap.monthLabels : [""];
+        let colorMin = heatmap.hasData ? heatmap.minValue : 0;
+        let colorMax = heatmap.hasData
+          ? (heatmap.maxValue > heatmap.minValue ? heatmap.maxValue : heatmap.maxValue + 1)
+          : 1;
+        if (useTempPalette && heatmap.hasData) {
+          const absMax = Math.max(Math.abs(heatmap.minValue || 0), Math.abs(heatmap.maxValue || 0), 0.0001);
+          colorMin = -absMax;
+          colorMax = absMax;
+        }
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: {
+            categories: Array.from({ length: 31 }, (_, i) => `${i + 1}`),
+            title: { text: historyText.heatmapDayOfMonth },
+            labels: { style: { color: c.text } }
+          },
+          yAxis: {
+            categories: monthCategories,
+            title: { text: historyText.heatmapMonth },
+            reversed: true,
+            labels: { style: { color: c.text } }
+          },
+          colorAxis: {
+            min: colorMin,
+            max: colorMax,
+            stops: heatmapStops,
+            labels: { style: getHeatmapColorAxisLabelStyle(isLightTheme) }
+          },
+          plotOptions: { heatmap: { borderWidth: 1, borderColor: cellBorderColor, turboThreshold: 0, nullColor: isLightTheme ? "#eef2ff" : "#212c45" } },
+          legend: {
+            itemStyle: { color: c.text },
+            itemHoverStyle: { color: c.text }
+          },
+          tooltip: {
+            pointFormatter: function () {
+              const monthLabel = monthCategories[this.y] || "-";
+              const count = this.custom?.count || 0;
+              if (!count || this.value == null) {
+                return `<b>${monthLabel}, ${this.x + 1}</b><br>${historyText.heatmapValue}: <b>${historyText.heatmapNoData}</b>`;
+              }
+              const min = this.custom?.min != null ? this.custom.min : this.value;
+              const max = this.custom?.max != null ? this.custom.max : this.value;
+              return `<b>${monthLabel}, ${this.x + 1}</b><br>${historyText.heatmapValue}: <b>${this.value}</b><br>${historyText.heatmapPoints}: <b>${count}</b><br>${historyText.summaryMinMax}: <b>${min} / ${max}</b>`;
+            }
+          },
+          series: [{ name: historyText.heatmapMonthlyValue, type: "heatmap", data: heatmap.points }]
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode, useStock: false };
+      }
+
+      if (selectedChartType === "movingavg") {
+        const movingAvg = buildMovingAverageSeries(numericData, 10);
+        const useTempPalette = mode === "numeric" && isTemperatureDivergingPalette(selectedPalette);
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { type: "datetime" },
+          yAxis: {
+            title: { text: "{{ _('Value') }}" },
+            labels: mode === "boolean" ? { formatter: function () { return this.value === 1 ? "True" : "False"; } } : {},
+            plotLines: [
+              ...(useTempPalette ? getTemperatureZeroLine(isLightTheme) : []),
+              ...((presetVisuals && !useTempPalette) ? presetVisuals.plotLines : [])
+            ],
+            plotBands: (presetVisuals && !useTempPalette) ? presetVisuals.plotBands : []
+          },
+          series: [
+            {
+              name: historyText.movingAverageSource,
+              type: "line",
+              data: numericData,
+              color: c.secondary,
+              lineWidth: 1,
+              opacity: 0.5,
+              tooltip: { valueDecimals: 4 }
+            },
+            {
+              name: historyText.movingAverageLine,
+              type: "spline",
+              data: movingAvg,
+              color: c.primary,
+              lineWidth: 2.4,
+              zoneAxis: useTempPalette ? "y" : undefined,
+              zones: useTempPalette
+                ? getTemperatureSeriesZones(isLightTheme)
+                : (presetVisuals?.zones?.length ? presetVisuals.zones : undefined),
+              tooltip: { valueDecimals: 4 }
+            }
+          ].concat((presetVisuals && !useTempPalette) ? presetVisuals.extraSeries : []),
+          navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+          rangeSelector: { enabled: !compact, inputEnabled: false }
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode };
+      }
+
+      if (selectedChartType === "delta") {
+        const deltaData = buildDeltaSeries(numericData);
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { type: "datetime" },
+          yAxis: { title: { text: historyText.deltaAxis } },
+          plotOptions: {
+            series: {
+              zones: [
+                { value: 0, color: c.danger },
+                { color: c.success }
+              ]
+            }
+          },
+          series: [{
+            name: historyText.deltaSeries,
+            type: "column",
+            data: deltaData,
+            tooltip: { valueDecimals: 4 }
+          }],
+          navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+          rangeSelector: { enabled: !compact, inputEnabled: false }
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode };
+      }
+
+      if (selectedChartType === "waterfall") {
+        const deltaData = buildDeltaSeries(numericData);
+        let running = 0;
+        const cumulative = deltaData.map((point) => {
+          running += Number(point[1] || 0);
+          return [point[0], Number(running.toFixed(4))];
+        });
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { type: "datetime" },
+          yAxis: { title: { text: historyText.waterfallAxis } },
+          plotOptions: {
+            column: { colorByPoint: true },
+            series: {
+              zones: [
+                { value: 0, color: c.danger },
+                { color: c.success }
+              ]
+            }
+          },
+          series: [
+            { name: historyText.waterfallDelta, type: "column", data: deltaData, tooltip: { valueDecimals: 4 } },
+            { name: historyText.waterfallCumulative, type: "spline", data: cumulative, color: c.primary, tooltip: { valueDecimals: 4 } }
+          ],
+          navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+          rangeSelector: { enabled: !compact, inputEnabled: false }
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode };
+      }
+
+      if (selectedChartType === "bullet") {
+        const stats = buildProgressStats(numericData);
+        const currentValue = stats ? stats.current : 0;
+        const minValue = stats ? stats.min : 0;
+        const maxValue = stats ? stats.max : 1;
+        const avgValue = stats ? stats.avg : 0;
+        const safeMax = maxValue <= minValue ? minValue + 1 : maxValue;
+        const band1 = minValue + (safeMax - minValue) * 0.33;
+        const band2 = minValue + (safeMax - minValue) * 0.66;
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+          title: { text: state.payload.property_label },
+          xAxis: { categories: [historyText.bulletCurrentCategory] },
+          yAxis: {
+            min: minValue,
+            max: safeMax,
+            title: { text: historyText.bulletAxis },
+            plotLines: [{ value: avgValue, color: c.warning, width: 2, dashStyle: "ShortDash", label: { text: historyText.bulletAverage } }],
+            plotBands: [
+              { from: minValue, to: band1, color: "rgba(220, 53, 69, 0.15)" },
+              { from: band1, to: band2, color: "rgba(255, 193, 7, 0.15)" },
+              { from: band2, to: safeMax, color: "rgba(25, 135, 84, 0.15)" }
+            ]
+          },
+          series: [{ name: historyText.bulletCurrent, type: "bullet", data: [{ y: currentValue, target: avgValue }] }]
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode, useStock: false };
+      }
+
+      if (selectedChartType === "radar24") {
+        const profile = buildHourlyAverageProfile(numericData);
+        chartOptions = {
+          chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight, polar: true, type: "line" },
+          title: { text: state.payload.property_label },
+          pane: { size: "82%" },
+          xAxis: { categories: Array.from({ length: 24 }, (_, i) => `${i}:00`), tickmarkPlacement: "on", lineWidth: 0 },
+          yAxis: { title: { text: historyText.profileAxisAverage } },
+          series: [{ name: historyText.profileSeries, type: "line", data: profile, color: c.primary, marker: { enabled: true, radius: 2 } }]
+        };
+        caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+        return { chartOptions, caption, mode, useStock: false };
+      }
+
+      const useTempPalette = mode === "numeric" && isTemperatureDivergingPalette(selectedPalette);
+      chartOptions = {
+        chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+        title: { text: state.payload.property_label },
+        xAxis: { type: "datetime" },
+        yAxis: {
+          title: { text: "{{ _('Value') }}" },
+          labels: mode === "boolean" ? { formatter: function () { return this.value === 1 ? "True" : "False"; } } : {},
+          plotLines: [
+            ...(useTempPalette ? getTemperatureZeroLine(isLightTheme) : []),
+            ...((presetVisuals && !useTempPalette) ? presetVisuals.plotLines : [])
+          ],
+          plotBands: (presetVisuals && !useTempPalette) ? presetVisuals.plotBands : []
+        },
+        series: [{
+          name: state.payload.property_label,
+          type: seriesType,
+          step: (mode === "boolean" || isStepMode) ? "left" : undefined,
+          data: numericData,
+          color: c.primary,
+          zoneAxis: useTempPalette ? "y" : undefined,
+          zones: useTempPalette
+            ? getTemperatureSeriesZones(isLightTheme)
+            : (presetVisuals?.zones?.length ? presetVisuals.zones : undefined),
+          tooltip: { valueDecimals: 4 }
+        }].concat((presetVisuals && !useTempPalette) ? presetVisuals.extraSeries : []),
+        navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+        rangeSelector: { enabled: !compact, inputEnabled: false }
+      };
+      caption = `${historyText.captionViewPrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+      return { chartOptions, caption, mode };
+    }
+
+    const isStateUnsupported = [
+      "stepmarkers",
+      "linearea",
+      "movingavg",
+      "delta",
+      "ohlc",
+      "histogram",
+      "heatmap24",
+      "heatmap24value",
+      "heatmapmonthvalue",
+      "waterfall",
+      "bullet",
+      "radar24"
+    ].includes(selectedChartType);
+    chartOptions = {
+      chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
+      title: { text: state.payload.property_label },
+      xAxis: { type: "datetime" },
+      yAxis: {
+        title: { text: "{{ _('State') }}" },
+        categories: seriesData.state_categories || []
+      },
+      series: [{
+        name: state.payload.property_label,
+        type: isStateUnsupported ? "line" : seriesType,
+        step: isStateUnsupported ? "left" : seriesStep,
+        data: seriesData.state || [],
+        color: c.primary
+      }],
+      navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
+      rangeSelector: { enabled: !compact, inputEnabled: false }
+    };
+    if (isStateUnsupported) {
+      caption = `${historyText.captionStatePrefix}: ${historyText.captionStateFallback} ("${chartTypeLabelMap[selectedChartType]}")`;
+    } else {
+      caption = `${historyText.captionStatePrefix}: ${chartTypeLabelMap[selectedChartType] || selectedChartType}`;
+    }
+
+    return { chartOptions, caption, mode };
+  }
+
+  function updateChartTypeHelp() {
+    const chartType = qs("chartType");
+    const help = qs("chartTypeHelp");
+    if (!chartType || !help) return;
+    const descriptions = chartI18n.typeDescriptions;
+    const label = chartType.options[chartType.selectedIndex]?.textContent?.trim() || chartType.value;
+    const text = descriptions[chartType.value] || historyText.chartTypeUnavailableDescription;
+    help.title = text;
+    help.setAttribute("aria-label", `${historyText.chartTypeAriaPrefix} "${label}": ${text}`);
+  }
+
+  function renderChartInto(targetId, compact) {
+    if (!isChartSupportedMode()) return;
+    const { chartOptions, caption, useStock } = buildMainChartOptions(targetId, compact);
+    if (targetId === "mainChart") qs("chartCaption").textContent = caption;
+    if (targetId === "mainChart" && state.mainChart) {
+      state.mainChart.destroy();
+      state.mainChart = null;
+    }
+    const chartBuilder = useStock === false ? Highcharts.chart : Highcharts.stockChart;
+    const chart = chartBuilder(chartOptions);
+    if (targetId === "mainChart") {
+      state.mainChart = chart;
+    }
+  }
+
+  function bindChartResize() {
+    const handle = qs("chartResizeHandle");
+    if (!handle) return;
+    let startY = 0;
+    let startHeight = state.chartHeight;
+    let dragging = false;
+
+    const onMove = (event) => {
+      if (!dragging) return;
+      const dy = event.clientY - startY;
+      applyChartHeight(startHeight + dy, true);
+    };
+
+    const stopDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove("history-resizing");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stopDrag);
+      window.removeEventListener("pointercancel", stopDrag);
+    };
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      startY = event.clientY;
+      startHeight = state.chartHeight;
+      dragging = true;
+      document.body.classList.add("history-resizing");
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", stopDrag);
+      window.addEventListener("pointercancel", stopDrag);
+    });
+
+    handle.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        applyChartHeight(state.chartHeight - 20, true);
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        applyChartHeight(state.chartHeight + 20, true);
+      }
+    });
+  }
+
+  function renderSmallCharts() {
+    if (!isChartSupportedMode()) return;
+    const seriesData = state.payload.series || {};
+    Highcharts.chart("sourceChart", {
+      chart: { type: "pie" },
+      title: { text: null },
+      series: [{ name: "{{ _('Sources') }}", data: seriesData.source_pie || [] }],
+      credits: { enabled: false }
+    });
+    Highcharts.chart("valueChart", {
+      chart: { type: "pie" },
+      title: { text: null },
+      series: [{ name: "{{ _('Values') }}", data: seriesData.value_pie || [] }],
+      credits: { enabled: false }
+    });
+    Highcharts.chart("durationChart", {
+      chart: { type: "column" },
+      title: { text: null },
+      xAxis: { type: "category" },
+      yAxis: { title: { text: null } },
+      series: [{ name: "{{ _('Duration') }}", data: seriesData.duration_column || [] }],
+      credits: { enabled: false }
+    });
+  }
+
+  function formatMetric(value) {
+    return value == null || value === "" ? "-" : value;
+  }
+
+  function parseNumericClient(value) {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "boolean") return value ? 1 : 0;
+    if (value == null) return null;
+    const normalized = String(value).trim().replace(",", ".");
+    if (!normalized) return null;
+    if (normalized.toLowerCase() === "true") return 1;
+    if (normalized.toLowerCase() === "false") return 0;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function percentile(values, ratio) {
+    if (!values.length) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    if (sorted.length === 1) return sorted[0];
+    const position = (sorted.length - 1) * ratio;
+    const lower = Math.floor(position);
+    const upper = Math.ceil(position);
+    if (lower === upper) return sorted[lower];
+    const weight = position - lower;
+    return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
+  }
+
+  function buildAnalyticsFallback() {
+    const entries = state.payload.entries || [];
+    const hourlyCounts = Array.from({ length: 24 }, () => 0);
+    const numericEntries = [];
+    const activeProfile = Array.from({ length: 24 }, () => 0);
+
+    entries.forEach((entry) => {
+      const added = entry.added ? new Date(entry.added) : null;
+      if (added && !Number.isNaN(added.getTime())) {
+        hourlyCounts[added.getHours()] += 1;
+      }
+      const numericValue = entry.numeric_value ?? parseNumericClient(entry.value ?? entry.display_value);
+      const deltaValue = entry.delta_numeric ?? parseNumericClient(entry.delta_display);
+      if (numericValue != null) {
+        numericEntries.push({
+          ...entry,
+          numeric_value: numericValue,
+          delta_numeric: deltaValue
+        });
+      }
+      if (added && !Number.isNaN(added.getTime()) && parseNumericClient(entry.value ?? entry.display_value) === 1 && entry.duration_seconds) {
+        activeProfile[added.getHours()] += entry.duration_seconds;
+      }
+    });
+
+    const numericValues = numericEntries.map((entry) => entry.numeric_value);
+    const minEntry = numericEntries.length ? numericEntries.reduce((best, item) => item.numeric_value < best.numeric_value ? item : best, numericEntries[0]) : null;
+    const maxEntry = numericEntries.length ? numericEntries.reduce((best, item) => item.numeric_value > best.numeric_value ? item : best, numericEntries[0]) : null;
+    const stddev = numericValues.length
+      ? Number(Math.sqrt(numericValues.reduce((sum, value) => {
+          const avg = numericValues.reduce((acc, item) => acc + item, 0) / numericValues.length;
+          return sum + ((value - avg) ** 2);
+        }, 0) / numericValues.length).toFixed(4))
+      : null;
+    const dailyProfile = Array.from({ length: 24 }, (_, hour) => {
+      const hourlyValues = numericEntries
+        .filter((entry) => {
+          const added = entry.added ? new Date(entry.added) : null;
+          return added && !Number.isNaN(added.getTime()) && added.getHours() === hour;
+        })
+        .map((entry) => entry.numeric_value);
+      return [hour, hourlyValues.length ? Number((hourlyValues.reduce((sum, value) => sum + value, 0) / hourlyValues.length).toFixed(4)) : null];
+    });
+    const topJumps = numericEntries
+      .filter((entry) => entry.delta_numeric != null)
+      .sort((a, b) => Math.abs(b.delta_numeric) - Math.abs(a.delta_numeric))
+      .slice(0, 10)
+      .map((entry) => ({
+        added: entry.added,
+        value: entry.display_value,
+        previous_value: entry.previous_display_value,
+        delta: entry.delta_numeric,
+        delta_display: entry.delta_display || (entry.delta_numeric != null ? `${entry.delta_numeric > 0 ? "+" : ""}${entry.delta_numeric}` : ""),
+        source: entry.source
+      }));
+    const positiveDeltas = numericEntries.filter((entry) => entry.delta_numeric != null && entry.delta_numeric >= 0).map((entry) => entry.delta_numeric);
+    const counterLike = numericEntries.length >= 3
+      && positiveDeltas.length / Math.max(1, numericEntries.filter((entry) => entry.delta_numeric != null).length) >= 0.8
+      && (numericEntries[numericEntries.length - 1].numeric_value - numericEntries[0].numeric_value) >= 0;
+    const incrementProfile = Array.from({ length: 24 }, (_, hour) => {
+      const value = numericEntries.reduce((sum, entry) => {
+        const added = entry.added ? new Date(entry.added) : null;
+        if (!added || Number.isNaN(added.getTime()) || added.getHours() !== hour || entry.delta_numeric == null || entry.delta_numeric <= 0) {
+          return sum;
+        }
+        return sum + entry.delta_numeric;
+      }, 0);
+      return [hour, Number(value.toFixed(4))];
+    });
+    const activeEntries = entries.filter((entry) => parseNumericClient(entry.value ?? entry.display_value) === 1);
+    const activeDurations = activeEntries.map((entry) => entry.duration_seconds).filter((value) => value != null);
+    const binaryStats = activeEntries.length || activeDurations.length ? {
+      active_seconds: Number(activeDurations.reduce((sum, value) => sum + value, 0).toFixed(2)),
+      activation_count: activeEntries.filter((entry) => parseNumericClient(entry.previous_value ?? entry.previous_display_value) !== 1).length,
+      avg_active_seconds: activeDurations.length ? Number((activeDurations.reduce((sum, value) => sum + value, 0) / activeDurations.length).toFixed(2)) : null,
+      longest_active_seconds: activeDurations.length ? Math.max(...activeDurations) : null,
+      active_profile: activeProfile.map((value, hour) => [hour, Number(value.toFixed(2))])
+    } : null;
+
+    return {
+      hourly_activity: hourlyCounts.map((count, hour) => [hour, count]),
+      top_jumps: topJumps,
+      stats: {
+        median: numericValues.length ? Number(percentile(numericValues, 0.5).toFixed(4)) : null,
+        p10: numericValues.length ? Number(percentile(numericValues, 0.1).toFixed(4)) : null,
+        p90: numericValues.length ? Number(percentile(numericValues, 0.9).toFixed(4)) : null,
+        stddev
+      },
+      min_point: minEntry ? { value: minEntry.numeric_value, added: minEntry.added } : null,
+      max_point: maxEntry ? { value: maxEntry.numeric_value, added: maxEntry.added } : null,
+      daily_profile: dailyProfile,
+      trend: numericEntries.length >= 2 ? {
+        delta_total: Number((numericEntries[numericEntries.length - 1].numeric_value - numericEntries[0].numeric_value).toFixed(4)),
+        direction: numericEntries[numericEntries.length - 1].numeric_value > numericEntries[0].numeric_value ? "up" : numericEntries[numericEntries.length - 1].numeric_value < numericEntries[0].numeric_value ? "down" : "flat"
+      } : null,
+      counter: counterLike ? {
+        is_counter_like: true,
+        increment_total: Number(positiveDeltas.reduce((sum, value) => sum + value, 0).toFixed(4)),
+        avg_increment_per_hour: null,
+        increment_profile: incrementProfile
+      } : null,
+      binary: binaryStats
+    };
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("\"", "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  const analyticsMetricHelp = {
+    median: {{ _('Analytics help median')|tojson }},
+    p10: {{ _('Analytics help p10')|tojson }},
+    p90: {{ _('Analytics help p90')|tojson }},
+    stddev: {{ _('Analytics help stddev')|tojson }},
+    min: {{ _('Analytics help min')|tojson }},
+    max: {{ _('Analytics help max')|tojson }},
+    trend: {{ _('Analytics help trend')|tojson }},
+    increment: {{ _('Analytics help increment')|tojson }},
+    active_time: {{ _('Analytics help active_time')|tojson }},
+    activations: {{ _('Analytics help activations')|tojson }}
+  };
+
+  function renderMetricLabel(label, helpKey = null) {
+    const description = helpKey ? analyticsMetricHelp[helpKey] : null;
+    if (!description) {
+      return `<span>${label}</span>`;
+    }
+    const safeLabel = escapeHtml(label);
+    const safeDescription = escapeHtml(description);
+    return `<span class="history-metric-label"><span>${safeLabel}</span><span class="history-help-icon" title="${safeDescription}" aria-label="${historyText.metricAriaPrefix}: ${safeLabel}" tabindex="0">?</span></span>`;
+  }
+
+  function renderAnalytics() {
+    if (!isChartSupportedMode()) return;
+    const fallbackAnalytics = buildAnalyticsFallback();
+    const serverAnalytics = state.payload.analytics || {};
+    const analytics = {
+      hourly_activity: (serverAnalytics.hourly_activity && serverAnalytics.hourly_activity.some((item) => item[1] > 0))
+        ? serverAnalytics.hourly_activity
+        : fallbackAnalytics.hourly_activity,
+      top_jumps: (serverAnalytics.top_jumps && serverAnalytics.top_jumps.length)
+        ? serverAnalytics.top_jumps
+        : fallbackAnalytics.top_jumps,
+      stats: {
+        median: serverAnalytics.stats?.median ?? fallbackAnalytics.stats?.median ?? null,
+        p10: serverAnalytics.stats?.p10 ?? fallbackAnalytics.stats?.p10 ?? null,
+        p90: serverAnalytics.stats?.p90 ?? fallbackAnalytics.stats?.p90 ?? null,
+        stddev: serverAnalytics.stats?.stddev ?? fallbackAnalytics.stats?.stddev ?? null
+      },
+      min_point: serverAnalytics.min_point ?? fallbackAnalytics.min_point ?? null,
+      max_point: serverAnalytics.max_point ?? fallbackAnalytics.max_point ?? null,
+      daily_profile: (serverAnalytics.daily_profile && serverAnalytics.daily_profile.some((item) => item[1] != null))
+        ? serverAnalytics.daily_profile
+        : fallbackAnalytics.daily_profile,
+      trend: serverAnalytics.trend ?? fallbackAnalytics.trend ?? null,
+      counter: serverAnalytics.counter ?? fallbackAnalytics.counter ?? null,
+      binary: serverAnalytics.binary ?? fallbackAnalytics.binary ?? null
+    };
+    const stats = analytics.stats || {};
+    const statsCards = qs("analyticsStatsCards");
+    if (statsCards) {
+      const cards = [
+        [historyText.statsMedian, formatMetric(stats.median), "is-primary", "median"],
+        ["P10", formatMetric(stats.p10), "", "p10"],
+        ["P90", formatMetric(stats.p90), "", "p90"],
+        ["StdDev", formatMetric(stats.stddev), "", "stddev"]
+      ];
+      statsCards.innerHTML = cards.map(([label, value, cls, helpKey]) => `
+        <div class="history-card ${cls}">
+          <div class="history-muted">${renderMetricLabel(label, helpKey)}</div>
+          <div class="metric">${value}</div>
+        </div>
+      `).join("");
+    }
+
+    const behaviorCards = qs("analyticsBehaviorCards");
+    if (behaviorCards) {
+      const behavior = [];
+      if (analytics.min_point) behavior.push([historyText.behaviorMin, `${analytics.min_point.value}`, formatDate(analytics.min_point.added), "min"]);
+      if (analytics.max_point) behavior.push([historyText.behaviorMax, `${analytics.max_point.value}`, formatDate(analytics.max_point.added), "max"]);
+      if (analytics.trend) {
+        const directionMap = { up: historyText.trendUp, down: historyText.trendDown, flat: historyText.trendFlat };
+        behavior.push([historyText.behaviorTrend, analytics.trend.delta_total, directionMap[analytics.trend.direction] || analytics.trend.direction, "trend"]);
+      }
+      if (analytics.counter?.is_counter_like) {
+        behavior.push([historyText.behaviorIncrement, analytics.counter.increment_total, analytics.counter.avg_increment_per_hour != null ? `~ ${analytics.counter.avg_increment_per_hour}/h` : "", "increment"]);
+      }
+      if (analytics.binary) {
+        behavior.push([historyText.behaviorActiveTime, analytics.binary.active_label || formatMetric(analytics.binary.active_seconds), "", "active_time"]);
+        behavior.push([historyText.behaviorActivations, analytics.binary.activation_count ?? "-", analytics.binary.avg_active_label || "", "activations"]);
+      }
+      behaviorCards.innerHTML = behavior.map(([label, value, meta, helpKey]) => `
+        <div class="history-card">
+          <div class="history-muted">${renderMetricLabel(label, helpKey)}</div>
+          <div class="metric">${formatMetric(value)}</div>
+          <div class="history-muted mt-1">${meta || ""}</div>
+        </div>
+      `).join("");
+    }
+
+    Highcharts.chart("analyticsHourlyChart", {
+      chart: { type: "column" },
+      title: { text: null },
+      xAxis: {
+        categories: (analytics.hourly_activity || []).map((item) => `${item[0]}:00`),
+        title: { text: historyText.hourlyAxis }
+      },
+      yAxis: {
+        min: 0,
+        title: { text: historyText.hourlyChangesAxis }
+      },
+      tooltip: {
+        pointFormat: historyText.hourlyPointFormat
+      },
+      series: [{
+        name: historyText.hourlySeries,
+        data: (analytics.hourly_activity || []).map((item) => item[1])
+      }],
+      credits: { enabled: false }
+    });
+
+    const profileTitle = qs("analyticsProfileTitle");
+    const profileCaption = qs("analyticsProfileCaption");
+    const profileTarget = qs("analyticsProfileChart");
+    let profileSeries = [];
+    let profileType = "line";
+    let profileCategories = Array.from({ length: 24 }, (_, hour) => `${hour}:00`);
+    let profileYAxis = null;
+    if (analytics.counter?.is_counter_like && analytics.counter.increment_profile) {
+      profileSeries = [{
+        name: historyText.profileIncrementSeries,
+        data: analytics.counter.increment_profile.map((item) => item[1])
+      }];
+      profileType = "column";
+      profileYAxis = { title: { text: historyText.profileIncrementAxis } };
+      if (profileTitle) profileTitle.textContent = historyText.profileIncrementTitle;
+      if (profileCaption) profileCaption.textContent = historyText.profileIncrementCaption;
+    } else if (analytics.binary?.active_profile) {
+      profileSeries = [{
+        name: historyText.profileActiveSeries,
+        data: analytics.binary.active_profile.map((item) => item[1] / 60)
+      }];
+      profileType = "column";
+      profileYAxis = { title: { text: historyText.profileActiveAxis } };
+      if (profileTitle) profileTitle.textContent = historyText.profileActiveTitle;
+      if (profileCaption) profileCaption.textContent = historyText.profileActiveCaption;
+    } else if (analytics.daily_profile) {
+      profileSeries = [{
+        name: historyText.profileAverageSeries,
+        data: analytics.daily_profile.map((item) => item[1])
+      }];
+      profileType = "spline";
+      profileYAxis = { title: { text: historyText.profileAverageAxis } };
+      if (profileTitle) profileTitle.textContent = historyText.profileAverageTitle;
+      if (profileCaption) profileCaption.textContent = historyText.profileAverageCaption;
+    }
+    if (profileTarget) {
+      Highcharts.chart("analyticsProfileChart", {
+        chart: { type: profileType },
+        title: { text: null },
+        xAxis: { categories: profileCategories },
+        yAxis: profileYAxis || { title: { text: null } },
+        series: profileSeries,
+        credits: { enabled: false }
+      });
+    }
+
+    const topJumpsBody = qs("topJumpsTableBody");
+    if (topJumpsBody) {
+      const jumps = analytics.top_jumps || [];
+      topJumpsBody.innerHTML = jumps.map((item) => `
+        <tr>
+          <td>${formatDate(item.added)}</td>
+          <td class="history-transition">${item.previous_value || "-"} -> ${item.value || "-"}</td>
+          <td>${item.delta_display || "-"}</td>
+          <td><span class="badge text-bg-secondary">${item.source || historyText.unknown}</span></td>
+        </tr>
+      `).join("") || `<tr><td colspan="4" class="text-center text-muted">${historyText.noNumericJumps}</td></tr>`;
+    }
+
+    renderSmallCharts();
+  }
+
+  function renderCharts() {
+    setChartsAvailability();
+    if (!isChartSupportedMode()) {
+      if (state.mainChart) {
+        state.mainChart.destroy();
+        state.mainChart = null;
+      }
+      return;
+    }
+    renderChartInto("mainChart", false);
+    renderAnalytics();
+  }
+
+  function renderInfo() {
+    const summary = state.payload.summary || {};
+    const comparison = state.payload.compare_previous;
+    const compareText = comparison ? `${historyText.currentFor}: ${summary.count_vs_previous ?? 0}, ${historyText.summaryAverage.toLowerCase()}: ${summary.avg_vs_previous ?? "-"}` : "-";
+    qs("tabInfoLastValue").textContent = summary.last_value || "-";
+    qs("tabInfoLastSource").textContent = summary.last_source || "-";
+    qs("tabInfoLastChanged").textContent = formatDate(summary.last_changed);
+    qs("tabInfoCompare").textContent = compareText;
+  }
+
+  function exportCsv() {
+    const rows = getFilteredEntries();
+    const header = ["changed", "source", "previous_value", "value", "transition", "delta", "duration", "current_for"];
+    const csv = [header.join(",")].concat(rows.map((item) => [
+      item.added,
+      item.source,
+      item.previous_display_value,
+      item.display_value,
+      item.transition,
+      item.delta_display,
+      item.duration_label,
+      item.changed_for_label
+    ].map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${state.objectName}_${state.propertyName}_history.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function bind() {
+    bindThemeWatcher();
+    bindTableSorting();
+    const rangeButtons = document.querySelectorAll("[data-range]");
+    rangeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        applyPresetRange(button.dataset.range, true);
+      });
+    });
+    qs("btnToday").addEventListener("click", () => { todayRange(); setActiveRange("today"); saveUiPrefs(); loadHistory(); });
+    qs("btnYesterday").addEventListener("click", () => { yesterdayRange(); setActiveRange("yesterday"); saveUiPrefs(); loadHistory(); });
+    qs("btnAll").addEventListener("click", () => {
+      qs("dtBegin").value = "";
+      qs("dtEnd").value = toLocalInputValue(new Date());
+      setActiveRange("all");
+      saveUiPrefs();
+      loadHistory();
+    });
+    ["dtBegin", "dtEnd"].forEach((id) => {
+      const element = qs(id);
+      if (!element) return;
+      element.addEventListener("input", () => {
+        setActiveRange(null);
+        saveUiPrefs();
+      });
+      element.addEventListener("change", () => {
+        setActiveRange(null);
+        saveUiPrefs();
+      });
+    });
+    qs("btnApply").addEventListener("click", () => {
+      saveUiPrefs();
+      loadHistory();
+    });
+    qs("btnExport").addEventListener("click", exportCsv);
+    ["searchQuery", "sourceFilter", "onlyChanges"].forEach((id) => {
+      const element = qs(id);
+      if (!element) return;
+      element.addEventListener("input", () => { saveUiPrefs(); renderTable(); });
+      element.addEventListener("change", () => { saveUiPrefs(); renderTable(); });
+    });
+    qs("chartType").addEventListener("change", () => {
+      saveUiPrefs();
+      updateChartTypeHelp();
+      renderCharts();
+    });
+    const chartPalette = qs("chartPalette");
+    if (chartPalette) {
+      chartPalette.addEventListener("change", () => {
+        saveUiPrefs();
+        renderCharts();
+      });
+    }
+    bindChartResize();
+  }
+
+  async function start() {
+    state.uiPrefs = loadUiPrefs();
+    bind();
+    restoreUiPrefsToControls();
+    applySavedIntervalBeforeLoad();
+    updateChartTypeHelp();
+    const savedHeight = window.localStorage.getItem(CHART_HEIGHT_STORAGE_KEY);
+    applyChartHeight(savedHeight || state.chartHeight, false);
+    const hasSavedInterval = Boolean(
+      (state.uiPrefs?.dtBegin && state.uiPrefs.dtBegin.trim())
+      || (state.uiPrefs?.dtEnd && state.uiPrefs.dtEnd.trim())
+      || (state.uiPrefs?.activeRange != null && state.uiPrefs.activeRange !== "")
+    );
+    if (!hasSavedInterval) {
+      const firstRangeButton = document.querySelector("[data-range]");
+      if (firstRangeButton) {
+        applyPresetRange(firstRangeButton.dataset.range, false);
+      } else {
+        defaultRange(24);
+        setActiveRange(null);
+      }
+      saveUiPrefs();
+    }
+    await loadInfo();
+    await loadHistory();
+  }
+
+  start();
+})();
+</script>
 {% endblock %}

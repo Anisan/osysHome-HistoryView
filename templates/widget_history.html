@@ -1,672 +1,438 @@
-<!-- Highcharts -->
 <script src="/HistoryView/static/highcharts/highstock.js"></script>
+<script src="/HistoryView/static/highcharts/highcharts-more.js"></script>
+<script src="/HistoryView/static/highcharts/modules/heatmap.js"></script>
+<script src="/HistoryView/static/highcharts/modules/histogram-bellcurve.js"></script>
+<script src="/HistoryView/static/highcharts/modules/bullet.js"></script>
 <script src="/HistoryView/static/highcharts/exporting.js"></script>
 <script src="/HistoryView/static/highcharts/export-data.js"></script>
 <script src="/HistoryView/static/highcharts/accessibility.js"></script>
 
-<div id="widget_history_{{ widget_config.id }}" style="position: relative; height: 100%; display: flex; flex-direction: column; overflow: hidden;">
-  <div id="chart_{{ widget_config.id }}" style="flex: 1; min-height: 0; width: 100%; overflow: hidden;"></div>
+<div id="widget_history_{{ widget_config.id }}" style="height:100%; display:flex; flex-direction:column; gap:.5rem; overflow:hidden;">
+  <div id="chart_{{ widget_config.id }}" style="flex:1; min-height:0; width:100%;"></div>
 </div>
 
 <script>
-(function() {
-  'use strict';
-  
-  const widgetId = '{{ widget_config.id }}';
-  const chartContainerId = 'chart_' + widgetId;
-  const widgetConfig = {{ widget_config | tojson }};
-  const propertiesData = {{ properties_data | tojson }};
-  const propertiesLabels = {{ properties_labels | tojson }};
-  
-  // Get Bootstrap colors
-  function getBootstrapColors() {
+(function () {
+  const widgetId = {{ widget_config.id|tojson }};
+  const widgetConfig = {{ widget_config|tojson }};
+  const payloads = {{ properties_payloads|tojson }};
+  const chartContainerId = `chart_${widgetId}`;
+
+  function colors() {
     const body = document.querySelector('[data-tag="body"]') || document.body;
-    const currentTheme = body.getAttribute('data-bs-theme');
-    const isDark = currentTheme === 'dark';
-    
-    const getCSSVariable = (varName) => {
-      const value = getComputedStyle(body).getPropertyValue(varName).trim();
-      return value || null;
-    };
-    
-    const primary = getCSSVariable('--bs-primary') || (isDark ? '#0d6efd' : '#0d6efd');
-    const textColor = getCSSVariable('--bs-body-color') || (isDark ? '#fff' : '#212529');
-    const backgroundColor = getCSSVariable('--bs-body-bg') || (isDark ? '#212529' : '#fff');
-    const borderColor = getCSSVariable('--bs-border-color') || (isDark ? '#495057' : '#dee2e6');
-    const gridLineColor = borderColor;
-    
+    const css = getComputedStyle(body);
     return {
-      primary: primary,
-      textColor: textColor,
-      backgroundColor: backgroundColor,
-      borderColor: borderColor,
-      gridLineColor: gridLineColor
+      primary: css.getPropertyValue('--bs-primary').trim() || '#0d6efd',
+      success: css.getPropertyValue('--bs-success').trim() || '#198754',
+      info: css.getPropertyValue('--bs-info').trim() || '#0dcaf0',
+      warning: css.getPropertyValue('--bs-warning').trim() || '#ffc107',
+      danger: css.getPropertyValue('--bs-danger').trim() || '#dc3545',
+      secondary: css.getPropertyValue('--bs-secondary').trim() || '#6c757d',
+      text: css.getPropertyValue('--bs-body-color').trim() || '#212529',
+      bg: css.getPropertyValue('--bs-body-bg').trim() || '#fff',
+      border: css.getPropertyValue('--bs-border-color').trim() || '#dee2e6'
     };
   }
-  
-  // Apply Bootstrap theme to Highcharts
-  function applyBootstrapTheme() {
-    const colors = getBootstrapColors();
-    
+
+  function applyTheme() {
+    const c = colors();
     Highcharts.setOptions({
-      time: {
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      colors: [
-        colors.primary,
-        '#198754',
-        '#0dcaf0',
-        '#ffc107',
-        '#dc3545',
-        '#6c757d',
-        '#fd7e14',
-        '#20c997',
-        '#6f42c1',
-        '#d63384'
-      ],
-      chart: {
-        backgroundColor: colors.backgroundColor,
-        borderColor: colors.borderColor,
-        style: {
-          color: colors.textColor,
-          fontFamily: 'var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)'
-        }
-      },
-      title: {
-        style: {
-          color: colors.textColor
-        }
-      },
-      xAxis: {
-        gridLineColor: colors.gridLineColor,
-        lineColor: colors.borderColor,
-        tickColor: colors.borderColor,
-        labels: {
-          style: {
-            color: colors.textColor
-          }
-        }
-      },
-      yAxis: {
-        gridLineColor: colors.gridLineColor,
-        lineColor: colors.borderColor,
-        tickColor: colors.borderColor,
-        labels: {
-          style: {
-            color: colors.textColor
-          }
-        }
-      },
-      legend: {
-        backgroundColor: colors.backgroundColor,
-        itemStyle: {
-          color: colors.textColor
-        },
-        itemHoverStyle: {
-          color: colors.primary
-        }
-      },
-      tooltip: {
-        backgroundColor: colors.backgroundColor,
-        borderColor: colors.borderColor,
-        style: {
-          color: colors.textColor
-        }
-      }
+      time: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+      colors: [c.primary, c.success, c.info, c.warning, c.danger, c.secondary],
+      chart: { backgroundColor: c.bg, style: { color: c.text } },
+      title: { style: { color: c.text } },
+      xAxis: { lineColor: c.border, tickColor: c.border, labels: { style: { color: c.text } } },
+      yAxis: { gridLineColor: c.border, lineColor: c.border, tickColor: c.border, labels: { style: { color: c.text } } },
+      legend: { itemStyle: { color: c.text } },
+      tooltip: { backgroundColor: c.bg, borderColor: c.border, style: { color: c.text } }
     });
   }
-  
-  // Calculate chart height based on widget container
-  let lastCalculatedHeight = null;
-  function calculateChartHeight() {
-    const widgetContainer = document.getElementById('widget_history_' + widgetId);
-    const chartContainer = document.getElementById(chartContainerId);
-    
-    if (!widgetContainer || !chartContainer) {
-      return 300; // default fallback
-    }
-    
-    // Check if we're on a fullscreen page (widget_page.html)
-    // More reliable detection: check for container-fluid parent and card-body with flex-grow
-    const containerFluid = widgetContainer.closest('.container-fluid');
-    const cardBody = widgetContainer.closest('.card-body.flex-grow-1');
-    const isFullscreenPage = containerFluid !== null && cardBody !== null;
-    
-    if (isFullscreenPage) {
-      // For fullscreen page, use viewport height minus header and margins
-      const viewportHeight = window.innerHeight;
-      const headerHeight = 100; // Approximate header + padding
-      const margins = 40; // Top and bottom margins
-      const calculatedHeight = Math.max(400, viewportHeight - headerHeight - margins);
-      
-      // Prevent infinite loop: only update if height changed significantly
-      if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
-        lastCalculatedHeight = calculatedHeight;
-        return calculatedHeight;
-      }
-      return lastCalculatedHeight;
-    }
-    
-    // For widget mode (in dashboard), use container-based calculation
-    // Find the card container that wraps the widget
-    let widgetCard = widgetContainer.closest('.card');
-    if (!widgetCard) {
-      widgetCard = widgetContainer.closest('.widget-card');
-    }
-    if (!widgetCard) {
-      widgetCard = widgetContainer.parentElement;
-    }
-    
-    if (widgetCard) {
-      // Prefer actual widget container height to avoid unused strips
-      const widgetHeight = widgetContainer.clientHeight || widgetContainer.getBoundingClientRect().height;
-      if (widgetHeight > 0) {
-        const calculatedHeight = Math.max(200, widgetHeight - 4);
-        if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
-          lastCalculatedHeight = calculatedHeight;
-          return calculatedHeight;
-        }
-        return lastCalculatedHeight;
-      }
 
-      // Fallback to card height when widget container size is not available
-      const cardRect = widgetCard.getBoundingClientRect();
-      const cardPadding = 16; // p-2 class = 0.5rem * 2 = 16px total vertical padding
-      const calculatedHeight = Math.max(200, cardRect.height - cardPadding);
-      
-      // Prevent infinite loop: only update if height changed significantly
-      if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
-        lastCalculatedHeight = calculatedHeight;
-        return calculatedHeight;
-      }
-      return lastCalculatedHeight;
-    }
-    
-    // Fallback: use widget container's available height directly
-    const widgetRect = widgetContainer.getBoundingClientRect();
-    const containerHeight = widgetRect.height;
-    const calculatedHeight = Math.max(200, containerHeight - 20);
-    
-    // Prevent infinite loop
-    if (lastCalculatedHeight === null || Math.abs(calculatedHeight - lastCalculatedHeight) > 10) {
-      lastCalculatedHeight = calculatedHeight;
-      return calculatedHeight;
-    }
-    return lastCalculatedHeight;
+  function chartHeight() {
+    const host = document.getElementById(`widget_history_${widgetId}`);
+    return Math.max(240, host ? host.getBoundingClientRect().height - 4 : 280);
   }
-  
-  // Create chart
-  function createChart() {
-    applyBootstrapTheme();
-    
-    const colors = getBootstrapColors();
-    const chartType = widgetConfig.chart_type || 'line';
-    const renderChartType = chartType === 'step' ? 'line' : chartType;
-    const seriesStep = chartType === 'step' ? 'left' : undefined;
-    
-    const getSeriesType = (type) => (type === 'step' ? 'line' : type);
-    const getSeriesStep = (type) => (type === 'step' ? 'left' : undefined);
-    
-    const propertiesMetaMap = {};
-    if (Array.isArray(widgetConfig.properties)) {
-      widgetConfig.properties.forEach((entry) => {
-        if (entry && typeof entry === 'object') {
-          const name = entry.name || (entry.object && entry.property ? entry.object + '.' + entry.property : null);
-          if (name) {
-            propertiesMetaMap[name] = entry;
-          }
-        }
+
+  function normalizeChartType(chartType) {
+    const t = (chartType || '').toLowerCase().trim();
+    if (!t) return 'line';
+    if (t === 'heatmap' || t === 'heatmap 24x7' || t === 'heatmap24x7') return 'heatmap24';
+    if (t === 'radar' || t === 'polar') return 'radar24';
+    if (t === 'waterfall delta') return 'waterfall';
+    if (t === 'moving average') return 'movingavg';
+    return t;
+  }
+
+  function isDedicatedType(chartType) {
+    const t = normalizeChartType(chartType);
+    return ['pie', 'heatmap24', 'histogram', 'bullet', 'radar24'].includes(t);
+  }
+
+  function isStockSafeType(type) {
+    return ['line', 'column', 'spline', 'area', 'areaspline', 'scatter', 'ohlc'].includes(type);
+  }
+
+  function resolveSeriesType(chartType) {
+    const t = normalizeChartType(chartType);
+    if (t === 'step' || t === 'stepmarkers') return { type: 'line', step: 'left', marker: t === 'stepmarkers' ? { enabled: true, radius: 2.5 } : undefined };
+    if (t === 'steparea') return { type: 'area', step: 'left' };
+    if (t === 'linearea') return { type: 'spline' };
+    if (!isStockSafeType(t)) return { type: 'line', step: undefined };
+    return { type: t, step: undefined };
+  }
+
+  function buildMovingAverage(data, windowSize = 10) {
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const result = [];
+    let rollingSum = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      const point = data[i];
+      const value = Array.isArray(point) ? Number(point[1]) : NaN;
+      if (!Number.isFinite(value)) continue;
+      rollingSum += value;
+      if (i >= windowSize) {
+        const old = data[i - windowSize];
+        const oldValue = Array.isArray(old) ? Number(old[1]) : NaN;
+        if (Number.isFinite(oldValue)) rollingSum -= oldValue;
+      }
+      const count = Math.min(i + 1, windowSize);
+      result.push([point[0], Number((rollingSum / count).toFixed(4))]);
+    }
+    return result;
+  }
+
+  function buildDelta(data) {
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const result = [];
+    for (let i = 1; i < data.length; i += 1) {
+      const prev = Number(data[i - 1][1]);
+      const curr = Number(data[i][1]);
+      if (!Number.isFinite(prev) || !Number.isFinite(curr)) continue;
+      result.push([data[i][0], Number((curr - prev).toFixed(4))]);
+    }
+    return result;
+  }
+
+  function getAutoBucketMs(data) {
+    if (!Array.isArray(data) || data.length < 2) return 3600 * 1000;
+    const minTs = Number(data[0][0]);
+    const maxTs = Number(data[data.length - 1][0]);
+    if (!Number.isFinite(minTs) || !Number.isFinite(maxTs) || maxTs <= minTs) return 3600 * 1000;
+    const span = maxTs - minTs;
+    return Math.max(5 * 60 * 1000, Math.min(24 * 3600 * 1000, Math.floor(span / 60)));
+  }
+
+  function buildOhlc(data) {
+    if (!Array.isArray(data) || data.length < 2) return [];
+    const bucketMs = getAutoBucketMs(data);
+    const map = new Map();
+    data.forEach((point) => {
+      const ts = Number(point[0]);
+      const value = Number(point[1]);
+      if (!Number.isFinite(ts) || !Number.isFinite(value)) return;
+      const bucketStart = Math.floor(ts / bucketMs) * bucketMs;
+      const prev = map.get(bucketStart);
+      if (!prev) {
+        map.set(bucketStart, { open: value, high: value, low: value, close: value });
+      } else {
+        prev.high = Math.max(prev.high, value);
+        prev.low = Math.min(prev.low, value);
+        prev.close = value;
+      }
+    });
+    return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([ts, o]) => [ts, o.open, o.high, o.low, o.close]);
+  }
+
+  function buildHeatmap(entriesBySeries) {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    entriesBySeries.forEach((series) => {
+      series.forEach((point) => {
+        const ts = Number(point[0]);
+        if (!Number.isFinite(ts)) return;
+        const d = new Date(ts);
+        const day = (d.getDay() + 6) % 7;
+        const hour = d.getHours();
+        grid[day][hour] += 1;
       });
+    });
+    let maxCount = 0;
+    const points = [];
+    for (let day = 0; day < 7; day += 1) {
+      for (let hour = 0; hour < 24; hour += 1) {
+        const count = grid[day][hour];
+        if (count > maxCount) maxCount = count;
+        points.push([hour, day, count]);
+      }
     }
-    
-    // Check if pie chart
-    if (chartType === 'pie') {
-      // Prepare pie chart data
-      const pieData = [];
-      for (const [propName, data] of Object.entries(propertiesData)) {
-        if (data && data.length > 0) {
-          // Get label for this property (description)
-          const propLabel = propertiesLabels[propName] || propName;
-          // Data format: [['Value1', count1], ['Value2', count2], ...]
-          pieData.push(...data.map(item => ({
-            name: item[0] + ' (' + propLabel + ')',
-            y: item[1]
-          })));
-        }
-      }
-      
-      if (pieData.length === 0) {
-        document.getElementById(chartContainerId).innerHTML = 
-          '<div style="text-align: center; padding: 20px; color: ' + colors.textColor + ';">{{ _("No data available") }}</div>';
-        return;
-      }
-      
-      const chartHeight = calculateChartHeight();
-      
-      // Ensure chart container has proper constraints
-      const chartContainer = document.getElementById(chartContainerId);
-      if (chartContainer) {
-        chartContainer.style.maxHeight = chartHeight + 'px';
-        chartContainer.style.height = chartHeight + 'px';
-        chartContainer.style.overflow = 'hidden';
-      }
-      
-      // Check if we're in widget mode (not fullscreen page)
-      const widgetContainer = document.getElementById('widget_history_' + widgetId);
-      const isWidgetMode = widgetContainer && widgetContainer.closest('.container-fluid') === null;
-      
-      const chartOptions = {
-        chart: {
-          renderTo: chartContainerId,
-          type: 'pie',
-          height: chartHeight,
-          spacingTop: isWidgetMode ? 4 : 10,
-          spacingRight: 10,
-          spacingBottom: isWidgetMode ? 0 : 10,
-          spacingLeft: 10
-        },
-        title: {
-          text: '{{ widget_config.name }}',
-          // In widget mode, make title smaller and more compact
-          style: {
-            fontSize: isWidgetMode ? '12px' : '16px'
-          },
-          margin: isWidgetMode ? 3 : 15
-        },
-        plotOptions: {
-          pie: {
-            allowPointSelect: true,
-            cursor: 'pointer',
-            dataLabels: {
-              enabled: widgetConfig.show_legend !== false,
-              format: '<b>{point.name}</b>: {point.percentage:.1f} %'
-            },
-            showInLegend: widgetConfig.show_legend !== false
+    return { points, maxCount };
+  }
+
+  function buildHistogram(data, bins = 12) {
+    const values = (data || []).map((p) => Number(p[1])).filter((v) => Number.isFinite(v));
+    if (!values.length) return { categories: [], counts: [] };
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (min === max) return { categories: [String(min)], counts: [values.length] };
+    const step = (max - min) / bins;
+    const counts = Array.from({ length: bins }, () => 0);
+    values.forEach((v) => {
+      let idx = Math.floor((v - min) / step);
+      if (idx >= bins) idx = bins - 1;
+      if (idx < 0) idx = 0;
+      counts[idx] += 1;
+    });
+    const categories = counts.map((_, i) => `${(min + i * step).toFixed(2)}..${(min + (i + 1) * step).toFixed(2)}`);
+    return { categories, counts };
+  }
+
+  function buildSeries() {
+    const list = Object.entries(payloads);
+    const first = list[0] ? list[0][1] : null;
+    if (!first) return { mode: 'empty', series: [] };
+    const effectiveMode = first.mode === 'boolean' ? 'numeric' : first.mode;
+    const categories = [];
+    const categoryIndex = {};
+    const widgetType = normalizeChartType(widgetConfig.chart_type || 'line');
+    const series = list.map(([name, payload]) => {
+      const meta = payload.widget_meta || {};
+      const requestedLocalType = normalizeChartType(meta.chart_type || widgetType || 'line');
+      // Prevent unsupported dedicated chart types from leaking into stock mixed-series mode.
+      const localType = (isDedicatedType(requestedLocalType) && requestedLocalType !== widgetType)
+        ? normalizeChartType(widgetType || 'line')
+        : requestedLocalType;
+      const normalizedType = resolveSeriesType(localType);
+      const seriesName = payload.property_description || name;
+      if (effectiveMode === 'state' && payload.series && payload.series.state) {
+        (payload.series.state_categories || []).forEach((item) => {
+          if (!(item in categoryIndex)) {
+            categoryIndex[item] = categories.length;
+            categories.push(item);
           }
-        },
-        series: [{
-          name: 'Values',
-          data: pieData
-        }],
-        credits: {
-          enabled: false
-        },
-        exporting: {
-          enabled: {% if widget_config.show_context_menu %}true{% else %}false{% endif %}
-        }
-      };
-      
-      const chart = new Highcharts.Chart(chartOptions);
-      
-      window['chart_' + widgetId] = chart;
-      return chart;
-    }
-    
-    // For other chart types (line, column, spline, area, step)
-    const series = [];
-    
-    // Prepare series data
-    for (const [propName, data] of Object.entries(propertiesData)) {
-      if (data && data.length > 0) {
-        // Get label for this property (description)
-        const propLabel = propertiesLabels[propName] || propName;
-        const meta = propertiesMetaMap[propName] || {};
-        const resolvedType = meta.chart_type || chartType;
-        const resolvedRenderType = getSeriesType(resolvedType);
-        const resolvedStep = getSeriesStep(resolvedType) || (resolvedType === chartType ? seriesStep : undefined);
-        const resolvedColor = meta.color ? String(meta.color).trim() : '';
-        
-        series.push({
-          name: propLabel,
-          data: data,
-          type: resolvedRenderType,
-          step: resolvedStep,
-          color: resolvedColor || undefined
         });
+        return {
+          name: seriesName,
+          type: normalizedType.type === 'area' ? 'area' : 'line',
+          step: normalizedType.step || 'left',
+          marker: normalizedType.marker,
+          data: (payload.series.state || []).map((point) => [point[0], categoryIndex[(payload.series.state_categories || [])[point[1]]] ?? point[1]]),
+          color: meta.color || undefined,
+          rawData: payload.series ? (payload.series.numeric || []) : []
+        };
       }
-    }
-    
-    if (series.length === 0) {
-      // No data available
-      document.getElementById(chartContainerId).innerHTML = 
-        '<div style="text-align: center; padding: 20px; color: ' + colors.textColor + ';">{{ _("No data available") }}</div>';
+      const rawData = payload.series ? (payload.series.numeric || []) : [];
+      let data = rawData;
+      let type = normalizedType.type;
+      let step = normalizedType.step;
+      let marker = normalizedType.marker;
+      if (localType === 'movingavg') {
+        data = buildMovingAverage(rawData, 10);
+        type = 'spline';
+      } else if (localType === 'delta' || localType === 'waterfall') {
+        data = buildDelta(rawData);
+        type = 'column';
+        step = undefined;
+        marker = undefined;
+      } else if (localType === 'ohlc') {
+        data = buildOhlc(rawData);
+        type = 'ohlc';
+        step = undefined;
+        marker = undefined;
+      } else if (localType === 'timeline') {
+        data = rawData.map((point) => [point[0], 1]);
+        type = 'scatter';
+        step = undefined;
+      } else if (isDedicatedType(localType) && localType !== widgetType) {
+        // Extra safeguard: if config is inconsistent, downgrade to standard line.
+        type = 'line';
+        step = undefined;
+        marker = undefined;
+        data = rawData;
+      }
+      return {
+        name: seriesName,
+        type,
+        step: payload.mode === 'boolean' && type === 'line' ? 'left' : step,
+        marker,
+        data,
+        rawData,
+        color: meta.color || undefined
+      };
+    });
+    return { mode: effectiveMode, series, categories, widgetType };
+  }
+
+  function sanitizeSeriesForStock(seriesList) {
+    return (seriesList || []).map((series) => {
+      const safeType = isStockSafeType(series.type) ? series.type : 'line';
+      const normalized = {
+        name: series.name,
+        type: safeType,
+        data: Array.isArray(series.data) ? series.data : [],
+        color: series.color
+      };
+      if (safeType === 'line' || safeType === 'area' || safeType === 'spline' || safeType === 'scatter') {
+        normalized.step = series.step;
+        if (series.marker) normalized.marker = series.marker;
+      }
+      return normalized;
+    });
+  }
+
+  function createChart() {
+    applyTheme();
+    const c = colors();
+    const built = buildSeries();
+    if (!built.series.length) {
+      document.getElementById(chartContainerId).innerHTML = '<div class="text-center text-muted p-3">{{ _("No data available") }}</div>';
       return;
     }
-    
-    const chartHeight = calculateChartHeight();
-    
-    // Ensure chart container has proper constraints
-    const chartContainer = document.getElementById(chartContainerId);
-    if (chartContainer) {
-      chartContainer.style.maxHeight = chartHeight + 'px';
-        chartContainer.style.height = chartHeight + 'px';
-      chartContainer.style.overflow = 'hidden';
+    const usePie = built.widgetType === 'pie';
+    if (usePie) {
+      const data = [];
+      Object.values(payloads).forEach((payload) => {
+        (payload.series && payload.series.value_pie ? payload.series.value_pie : []).forEach((item) => {
+          data.push([`${payload.property_description || payload.property_name}: ${item[0]}`, item[1]]);
+        });
+      });
+      Highcharts.chart(chartContainerId, {
+        chart: { type: 'pie', height: chartHeight() },
+        title: { text: widgetConfig.name },
+        series: [{ name: 'Values', data }],
+        legend: { enabled: widgetConfig.show_legend !== false },
+        exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+        credits: { enabled: false }
+      });
+      return;
     }
-    
-    // Check if we're in widget mode (not fullscreen page)
-    const widgetContainer = document.getElementById('widget_history_' + widgetId);
-    const isWidgetMode = widgetContainer && widgetContainer.closest('.container-fluid') === null;
-    
-    const chartOptions = {
-      chart: {
-        renderTo: chartContainerId,
-        type: renderChartType,
-        height: chartHeight,
-        zooming: {
-          type: 'x'
-        },
-        resetZoomButton: true,
-        spacingTop: isWidgetMode ? 4 : 10,
-        spacingRight: 10,
-        spacingBottom: isWidgetMode ? 0 : 10,
-        spacingLeft: 10
-      },
-      title: {
-        text: '{{ widget_config.name }}',
-        // In widget mode, make title smaller and more compact
-        style: {
-          fontSize: isWidgetMode ? '12px' : '16px'
-        },
-        margin: isWidgetMode ? 3 : 15
-      },
-      xAxis: {
-        type: 'datetime',
-        crosshair: true
-      },
-      yAxis: {
-        title: {
-          text: null
-        }
-      },
-      legend: {
-        enabled: widgetConfig.show_legend !== false,
-        // In widget mode, make legend more compact
-        layout: isWidgetMode ? 'horizontal' : 'horizontal',
-        align: 'center',
-        verticalAlign: isWidgetMode ? 'bottom' : 'bottom',
-        itemMarginBottom: isWidgetMode ? 2 : 5
-      },
+
+    if (built.widgetType === 'heatmap24') {
+      const dayLabels = ['{{ _("Mon") }}', '{{ _("Tue") }}', '{{ _("Wed") }}', '{{ _("Thu") }}', '{{ _("Fri") }}', '{{ _("Sat") }}', '{{ _("Sun") }}'];
+      const heatmap = buildHeatmap(built.series.map((s) => s.rawData || []));
+      Highcharts.chart(chartContainerId, {
+        chart: { type: 'heatmap', height: chartHeight() },
+        title: { text: widgetConfig.name },
+        xAxis: { categories: Array.from({ length: 24 }, (_, i) => `${i}:00`) },
+        yAxis: { categories: dayLabels, reversed: true, title: { text: null } },
+        colorAxis: { min: 0, max: Math.max(1, heatmap.maxCount) },
+        series: [{ name: '{{ _("Activity") }}', data: heatmap.points }],
+        exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+        credits: { enabled: false }
+      });
+      return;
+    }
+
+    if (built.widgetType === 'histogram') {
+      const allData = built.series.flatMap((s) => s.rawData || []);
+      const hist = buildHistogram(allData, 14);
+      Highcharts.chart(chartContainerId, {
+        chart: { type: 'column', height: chartHeight() },
+        title: { text: widgetConfig.name },
+        xAxis: { categories: hist.categories },
+        yAxis: { title: { text: '{{ _("Frequency") }}' }, min: 0 },
+        series: [{ name: '{{ _("Distribution") }}', data: hist.counts }],
+        exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+        credits: { enabled: false }
+      });
+      return;
+    }
+
+    if (built.widgetType === 'bullet') {
+      const points = built.series.map((s) => {
+        const values = (s.rawData || []).map((p) => Number(p[1])).filter((v) => Number.isFinite(v));
+        const current = values.length ? values[values.length - 1] : 0;
+        const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        return { y: current, target: avg };
+      });
+      Highcharts.chart(chartContainerId, {
+        chart: { type: 'bullet', height: chartHeight() },
+        title: { text: widgetConfig.name },
+        xAxis: { categories: built.series.map((s) => s.name) },
+        yAxis: { title: { text: null } },
+        series: [{ name: '{{ _("Current") }}', data: points }],
+        exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+        credits: { enabled: false }
+      });
+      return;
+    }
+
+    if (built.widgetType === 'radar24') {
+      const profileSeries = built.series.map((s) => {
+        const sums = Array.from({ length: 24 }, () => 0);
+        const counts = Array.from({ length: 24 }, () => 0);
+        (s.rawData || []).forEach((p) => {
+          const ts = Number(p[0]);
+          const val = Number(p[1]);
+          if (!Number.isFinite(ts) || !Number.isFinite(val)) return;
+          const hour = new Date(ts).getHours();
+          sums[hour] += val;
+          counts[hour] += 1;
+        });
+        return {
+          name: s.name,
+          type: 'line',
+          data: Array.from({ length: 24 }, (_, h) => counts[h] ? Number((sums[h] / counts[h]).toFixed(4)) : null),
+          color: s.color
+        };
+      });
+      Highcharts.chart(chartContainerId, {
+        chart: { polar: true, type: 'line', height: chartHeight() },
+        title: { text: widgetConfig.name },
+        pane: { size: '82%' },
+        xAxis: { categories: Array.from({ length: 24 }, (_, i) => `${i}:00`), tickmarkPlacement: 'on', lineWidth: 0 },
+        yAxis: { title: { text: null } },
+        series: profileSeries,
+        legend: { enabled: widgetConfig.show_legend !== false },
+        exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+        credits: { enabled: false }
+      });
+      return;
+    }
+
+    const options = {
+      chart: { renderTo: chartContainerId, height: chartHeight() },
+      title: { text: widgetConfig.name },
+      xAxis: { type: 'datetime' },
+      yAxis: built.mode === 'state'
+        ? { title: { text: null }, categories: built.categories }
+        : { title: { text: null } },
+      legend: { enabled: widgetConfig.show_legend !== false },
       navigator: {
-        enabled: widgetConfig.show_navigator !== false && !isWidgetMode,
-        height: isWidgetMode ? 0 : 40,
-        series: {
-          color: colors.primary,
-          lineColor: colors.primary
-        }
+        enabled: widgetConfig.show_navigator !== false,
+        series: { color: c.primary, lineColor: c.primary }
       },
-      rangeSelector: {
-        enabled: widgetConfig.show_range_selector !== false && !isWidgetMode,
-        buttons: [
-          { type: 'hour', count: 1, text: '1h' },
-          { type: 'hour', count: 6, text: '6h' },
-          { type: 'day', count: 1, text: '1D' },
-          { type: 'week', count: 1, text: '1W' },
-          { type: 'month', count: 1, text: '1M' },
-          { type: 'all', text: 'All' }
-        ],
-        selected: widgetConfig.show_range_selector !== false ? 5 : undefined,
-        inputEnabled: false
-      },
-      series: series,
-      credits: {
-        enabled: false
-      },
-      exporting: {
-        enabled: {% if widget_config.show_context_menu %}true{% else %}false{% endif %}
-      }
+      rangeSelector: { enabled: widgetConfig.show_range_selector !== false, inputEnabled: false },
+      series: sanitizeSeriesForStock(built.series),
+      exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+      credits: { enabled: false }
     };
-    
-    // Create chart
-    const chart = new Highcharts.StockChart(chartOptions);
-    
-    // Store chart reference for resize handling
-    window['chart_' + widgetId] = chart;
-    
-    return chart;
-  }
-  
-  // Handle resize with debounce to prevent infinite loops
-  let resizeTimeout = null;
-  function handleResize() {
-    // Clear existing timeout
-    if (resizeTimeout) {
-      clearTimeout(resizeTimeout);
-    }
-    
-    // Debounce resize handling
-    resizeTimeout = setTimeout(() => {
-      const chart = window['chart_' + widgetId];
-      const chartContainer = document.getElementById(chartContainerId);
-      if (chart && chartContainer) {
-        const newHeight = calculateChartHeight();
-        const currentHeight = chart.chartHeight;
-        
-        // Update container maxHeight
-        chartContainer.style.maxHeight = newHeight + 'px';
-        chartContainer.style.height = newHeight + 'px';
-        
-        // Only update if height changed significantly (more than 5px)
-        if (currentHeight === undefined || Math.abs(newHeight - currentHeight) > 5) {
-          chart.setSize(null, newHeight, false);
-        }
-      }
-    }, 150);
-  }
-  
-  // Initialize chart when DOM is ready
-  function initChart() {
-    // Wait a bit for layout to settle
-    setTimeout(() => {
-      createChart();
-      
-      // Watch for resize events - observe window resize instead of container
-      // This prevents infinite loops from ResizeObserver
-      window.addEventListener('resize', handleResize);
-      
-      // Also observe container, but with throttling
-      if (window.ResizeObserver) {
-        const widgetContainer = document.getElementById('widget_history_' + widgetId);
-        if (widgetContainer) {
-          const resizeObserver = new ResizeObserver((entries) => {
-            // Only trigger if the resize is from window, not from chart itself
-            for (const entry of entries) {
-              const { width, height } = entry.contentRect;
-              // Check if resize is significant (more than 10px change)
-              if (lastCalculatedHeight === null || Math.abs(height - lastCalculatedHeight) > 10) {
-                handleResize();
-              }
-            }
-          });
-          resizeObserver.observe(widgetContainer);
-        }
-      }
-    }, 100);
-  }
-  
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initChart);
-  } else {
-    initChart();
-  }
-  
-  // Handle theme change
-  function handleThemeChange() {
-    const existingChart = window['chart_' + widgetId];
-    if (existingChart) {
-      // Apply new theme globally
-      applyBootstrapTheme();
-      
-      const colors = getBootstrapColors();
-      const chartType = widgetConfig.chart_type || 'line';
-      
-      // For pie chart, update with different options
-      if (chartType === 'pie') {
-        existingChart.update({
-          chart: {
-            backgroundColor: colors.backgroundColor,
-            style: {
-              color: colors.textColor
-            }
-          },
-          plotOptions: {
-            pie: {
-              dataLabels: {
-                style: {
-                  color: colors.textColor
-                }
-              }
-            }
-          },
-          legend: {
-            backgroundColor: colors.backgroundColor,
-            itemStyle: {
-              color: colors.textColor
-            },
-            itemHoverStyle: {
-              color: colors.primary
-            }
-          },
-          tooltip: {
-            backgroundColor: colors.backgroundColor,
-            borderColor: colors.borderColor,
-            style: {
-              color: colors.textColor
-            }
-          }
-        }, true);
-        return;
-      }
-      
-      // Update chart with all theme-related options for other chart types
-      existingChart.update({
-        chart: {
-          backgroundColor: colors.backgroundColor,
-          style: {
-            color: colors.textColor,
-            fontFamily: 'var(--bs-font-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif)'
-          }
-        },
-        title: {
-          style: {
-            color: colors.textColor
-          }
-        },
-        xAxis: {
-          gridLineColor: colors.gridLineColor,
-          lineColor: colors.borderColor,
-          tickColor: colors.borderColor,
-          labels: {
-            style: {
-              color: colors.textColor
-            }
-          }
-        },
-        yAxis: {
-          gridLineColor: colors.gridLineColor,
-          lineColor: colors.borderColor,
-          tickColor: colors.borderColor,
-          labels: {
-            style: {
-              color: colors.textColor
-            }
-          }
-        },
-        legend: {
-          backgroundColor: colors.backgroundColor,
-          itemStyle: {
-            color: colors.textColor
-          },
-          itemHoverStyle: {
-            color: colors.primary
-          }
-        },
-        tooltip: {
-          backgroundColor: colors.backgroundColor,
-          borderColor: colors.borderColor,
-          style: {
-            color: colors.textColor
-          }
-        },
-        rangeSelector: {
-          buttonTheme: {
-            fill: colors.backgroundColor,
-            stroke: colors.borderColor,
-            style: {
-              color: colors.textColor
-            },
-            states: {
-              hover: {
-                fill: colors.borderColor,
-                stroke: colors.borderColor,
-                style: {
-                  color: colors.textColor
-                }
-              },
-              select: {
-                fill: colors.primary,
-                stroke: colors.borderColor,
-                style: {
-                  color: '#fff'
-                }
-              }
-            }
-          },
-          inputBoxBorderColor: colors.borderColor,
-          inputStyle: {
-            backgroundColor: colors.backgroundColor,
-            color: colors.textColor
-          },
-          labelStyle: {
-            color: colors.textColor
-          }
-        },
-        navigator: {
-          handles: {
-            backgroundColor: colors.backgroundColor,
-            borderColor: colors.borderColor
-          },
-          outlineColor: colors.borderColor,
-          series: {
-            color: colors.primary,
-            lineColor: colors.primary
-          },
-          xAxis: {
-            gridLineColor: colors.gridLineColor
-          }
-        }
-      }, true); // true = redraw
+    try {
+      Highcharts.stockChart(options);
+    } catch (error) {
+      console.error('HistoryView widget stockChart failed, fallback to basic chart', error, options);
+      const fallbackOptions = {
+        chart: { renderTo: chartContainerId, height: chartHeight(), type: 'line' },
+        title: { text: widgetConfig.name },
+        xAxis: { type: 'datetime' },
+        yAxis: built.mode === 'state'
+          ? { title: { text: null }, categories: built.categories }
+          : { title: { text: null } },
+        legend: { enabled: widgetConfig.show_legend !== false },
+        series: sanitizeSeriesForStock(built.series).map((s) => ({ ...s, type: (s.type === 'ohlc' ? 'line' : s.type) })),
+        exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
+        credits: { enabled: false }
+      };
+      Highcharts.chart(fallbackOptions);
     }
   }
-  
-  // Watch for theme changes
-  const body = document.querySelector('[data-tag="body"]') || document.body;
-  let lastTheme = body.getAttribute('data-bs-theme');
-  
-  const themeObserver = new MutationObserver(() => {
-    const currentTheme = body.getAttribute('data-bs-theme');
-    if (currentTheme !== lastTheme) {
-      lastTheme = currentTheme;
-      // Small delay to ensure CSS variables are updated
-      setTimeout(() => {
-        handleThemeChange();
-      }, 100);
+
+  function resizeChart() {
+    const chart = Highcharts.charts.find((item) => item && item.renderTo && item.renderTo.id === chartContainerId);
+    if (chart) {
+      chart.setSize(null, chartHeight(), false);
     }
-  });
-  
-  themeObserver.observe(body, {
-    attributes: true,
-    attributeFilter: ['data-bs-theme']
-  });
-  
-  // Also listen for theme toggle clicks (fallback)
-  const themeToggle = document.querySelector('.theme-toggle, [data-bs-theme-toggle], button[data-bs-theme]');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-      setTimeout(() => {
-        handleThemeChange();
-      }, 200);
-    });
   }
+
+  createChart();
+  window.addEventListener('resize', resizeChart);
 })();
 </script>
-
