@@ -185,6 +185,13 @@
     return { categories, counts };
   }
 
+  function getSeriesName(payload, fallbackName) {
+    const objectLabel = (payload && (payload.object_description || payload.object_name || '') || '').trim();
+    const propertyLabel = (payload && (payload.property_description || payload.property_name || fallbackName || '') || '').trim();
+    if (objectLabel && propertyLabel) return `${propertyLabel} (${objectLabel})`;
+    return propertyLabel || objectLabel || fallbackName;
+  }
+
   function buildSeries() {
     const list = Object.entries(payloads);
     const first = list[0] ? list[0][1] : null;
@@ -201,7 +208,7 @@
         ? normalizeChartType(widgetType || 'line')
         : requestedLocalType;
       const normalizedType = resolveSeriesType(localType);
-      const seriesName = payload.property_description || name;
+      const seriesName = getSeriesName(payload, name);
       if (effectiveMode === 'state' && payload.series && payload.series.state) {
         (payload.series.state_categories || []).forEach((item) => {
           if (!(item in categoryIndex)) {
@@ -290,8 +297,9 @@
     if (usePie) {
       const data = [];
       Object.values(payloads).forEach((payload) => {
+        const seriesName = getSeriesName(payload, payload.property_name);
         (payload.series && payload.series.value_pie ? payload.series.value_pie : []).forEach((item) => {
-          data.push([`${payload.property_description || payload.property_name}: ${item[0]}`, item[1]]);
+          data.push([`${seriesName}: ${item[0]}`, item[1]]);
         });
       });
       Highcharts.chart(chartContainerId, {
