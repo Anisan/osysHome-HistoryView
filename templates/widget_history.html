@@ -18,10 +18,77 @@
   const payloads = {{ properties_payloads|tojson }};
   const chartContainerId = `chart_${widgetId}`;
 
+  function getThemeBrightness(hexColor) {
+    if (!hexColor || typeof hexColor !== 'string') return 255;
+    const hex = hexColor.trim();
+    const full = hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+      : hex;
+    const match = /^#([0-9a-f]{6})$/i.exec(full);
+    if (!match) return 255;
+    const value = match[1];
+    const r = parseInt(value.slice(0, 2), 16);
+    const g = parseInt(value.slice(2, 4), 16);
+    const b = parseInt(value.slice(4, 6), 16);
+    return (0.299 * r) + (0.587 * g) + (0.114 * b);
+  }
+
+  function getChartPaletteOverrides(palette, isLightTheme) {
+    const normalized = String(palette || 'classic').toLowerCase();
+    if (normalized === 'soft') return { primary: isLightTheme ? '#5f7ed8' : '#7ea0ff', secondary: isLightTheme ? '#95a4c7' : '#8fa3c8', info: isLightTheme ? '#85aee6' : '#6f95d3', success: isLightTheme ? '#6ea894' : '#72bca4', warning: isLightTheme ? '#d6a96d' : '#dcb47a', danger: isLightTheme ? '#c78585' : '#d08c8c' };
+    if (normalized === 'contrast') return { primary: isLightTheme ? '#0046d5' : '#78acff', secondary: isLightTheme ? '#5f6b80' : '#9eabc6', info: isLightTheme ? '#0077ff' : '#42a0ff', success: isLightTheme ? '#0c8f54' : '#37bf7d', warning: isLightTheme ? '#d08a00' : '#f0b138', danger: isLightTheme ? '#c7253e' : '#ff6b7c' };
+    if (normalized === 'ocean') return { primary: isLightTheme ? '#0f8fc9' : '#69cef2', secondary: isLightTheme ? '#4f7c99' : '#8fb6cf', info: isLightTheme ? '#1ea8dd' : '#65d4ff', success: isLightTheme ? '#1f9d8f' : '#47c7b9', warning: isLightTheme ? '#db8a32' : '#f0b56b', danger: isLightTheme ? '#d14e66' : '#ff7d95' };
+    if (normalized === 'sunset') return { primary: isLightTheme ? '#ef6c57' : '#ff9b7d', secondary: isLightTheme ? '#8a6d63' : '#b79f97', info: isLightTheme ? '#ff8f6b' : '#ffb09a', success: isLightTheme ? '#c07a3d' : '#dda16b', warning: isLightTheme ? '#d14b2a' : '#ff815e', danger: isLightTheme ? '#b9313b' : '#ff6d7e' };
+    if (normalized === 'forest') return { primary: isLightTheme ? '#2f8a5c' : '#72c998', secondary: isLightTheme ? '#5c7667' : '#99b8a6', info: isLightTheme ? '#3a9f72' : '#7ed4ab', success: isLightTheme ? '#1e7f4c' : '#63c68f', warning: isLightTheme ? '#b58d3d' : '#d6ae60', danger: isLightTheme ? '#c24d57' : '#f07c87' };
+    if (normalized === 'fire') return { primary: isLightTheme ? '#ea5b2a' : '#ff9558', secondary: isLightTheme ? '#8e685d' : '#c0a19a', info: isLightTheme ? '#f07931' : '#ffb36e', success: isLightTheme ? '#c76729' : '#e98f50', warning: isLightTheme ? '#d93a1b' : '#ff704b', danger: isLightTheme ? '#b22421' : '#ff5c5c' };
+    if (normalized === 'mono') return { primary: isLightTheme ? '#505a70' : '#98a7bd', secondary: isLightTheme ? '#7a8394' : '#aab3c2', info: isLightTheme ? '#626d84' : '#b1c0d8', success: isLightTheme ? '#5e6674' : '#98a2b3', warning: isLightTheme ? '#7c7468' : '#b9ae9f', danger: isLightTheme ? '#7c5252' : '#bd8787' };
+    if (normalized === 'neon') return { primary: isLightTheme ? '#0077ff' : '#54b6ff', secondary: isLightTheme ? '#55668a' : '#9fb0d7', info: isLightTheme ? '#00a9ff' : '#68deff', success: isLightTheme ? '#00a57a' : '#5ce4b4', warning: isLightTheme ? '#ff7f11' : '#ffb04b', danger: isLightTheme ? '#ff2f6d' : '#ff74a2' };
+    if (normalized === 'tempdiv') return { primary: isLightTheme ? '#2f9e44' : '#61d17f', secondary: isLightTheme ? '#6f7f93' : '#9fb0c2', info: isLightTheme ? '#4fba61' : '#7fe297', success: isLightTheme ? '#2f9e44' : '#61d17f', warning: isLightTheme ? '#d6a45f' : '#e5bd7f', danger: isLightTheme ? '#d84b4b' : '#ff7777' };
+    if (normalized === 'tempsmooth') return { primary: isLightTheme ? '#5aaa6d' : '#7dc791', secondary: isLightTheme ? '#7b899c' : '#a5b1c2', info: isLightTheme ? '#76ba86' : '#96d3a6', success: isLightTheme ? '#5aaa6d' : '#7dc791', warning: isLightTheme ? '#d0ae7a' : '#dfc396', danger: isLightTheme ? '#d97f7f' : '#e79a9a' };
+    if (normalized === 'aurora') return { primary: isLightTheme ? '#4b9bd6' : '#79c2ff', secondary: isLightTheme ? '#6e83a6' : '#a4b7d6', info: isLightTheme ? '#63b8d9' : '#8ad7f0', success: isLightTheme ? '#45a87b' : '#75d1a7', warning: isLightTheme ? '#c99d58' : '#dfba7a', danger: isLightTheme ? '#c05d7f' : '#e892ad' };
+    if (normalized === 'desert') return { primary: isLightTheme ? '#be8a4a' : '#d6a56a', secondary: isLightTheme ? '#8a7562' : '#b79f8b', info: isLightTheme ? '#d19b5e' : '#e6ba86', success: isLightTheme ? '#8b9a5c' : '#aebf77', warning: isLightTheme ? '#cc7e3f' : '#e5a164', danger: isLightTheme ? '#b55a4c' : '#d68a80' };
+    if (normalized === 'vintage') return { primary: isLightTheme ? '#8e7758' : '#b39a77', secondary: isLightTheme ? '#7d7468' : '#a99e90', info: isLightTheme ? '#9d8a6f' : '#c0ad90', success: isLightTheme ? '#6f8a63' : '#93af86', warning: isLightTheme ? '#b08b54' : '#cfa876', danger: isLightTheme ? '#a46565' : '#c78b8b' };
+    if (normalized === 'ice') return { primary: isLightTheme ? '#3ea8d8' : '#74ccef', secondary: isLightTheme ? '#6a8899' : '#9bb8c9', info: isLightTheme ? '#5cc0e6' : '#8bdef7', success: isLightTheme ? '#53a8a0' : '#81cec6', warning: isLightTheme ? '#d0a660' : '#e4c188', danger: isLightTheme ? '#bf6f7f' : '#df98a7' };
+    if (normalized === 'berry') return { primary: isLightTheme ? '#b85f9f' : '#d98bc6', secondary: isLightTheme ? '#7c6d85' : '#a99ab2', info: isLightTheme ? '#cc79b3' : '#e3a0d0', success: isLightTheme ? '#7ba06f' : '#a4c49a', warning: isLightTheme ? '#ce8a52' : '#e6ad79', danger: isLightTheme ? '#a04c72' : '#c980a1' };
+    if (normalized === 'mint') return { primary: isLightTheme ? '#45b58b' : '#78d2af', secondary: isLightTheme ? '#6f8f86' : '#9fbdb5', info: isLightTheme ? '#63c9a2' : '#95e0c4', success: isLightTheme ? '#3ea078' : '#6ec69b', warning: isLightTheme ? '#c39e5f' : '#ddb984', danger: isLightTheme ? '#bd6d79' : '#dda0aa' };
+    if (normalized === 'preset_temperature') return { primary: isLightTheme ? '#d85b48' : '#ef7a69', secondary: isLightTheme ? '#6e7f98' : '#9db0ca', info: isLightTheme ? '#4f88d6' : '#72a7f1', success: isLightTheme ? '#2f93c4' : '#68bce6', warning: isLightTheme ? '#d9a15b' : '#e1b57b', danger: isLightTheme ? '#d84b3f' : '#ef6f61' };
+    if (normalized === 'preset_humidity') return { primary: isLightTheme ? '#4f9dbe' : '#79bfd9', secondary: isLightTheme ? '#6e7f8a' : '#9cb0bd', info: isLightTheme ? '#2d74b8' : '#5f9ee0', success: isLightTheme ? '#5ea66a' : '#87c490', warning: isLightTheme ? '#d0ad64' : '#dfc082', danger: isLightTheme ? '#b66b54' : '#d2947f' };
+    if (normalized === 'preset_power') return { primary: isLightTheme ? '#d06f35' : '#e49358', secondary: isLightTheme ? '#6f7888' : '#9ea9bc', info: isLightTheme ? '#7ba65d' : '#a2ca85', success: isLightTheme ? '#4b9f6b' : '#78c391', warning: isLightTheme ? '#d4a343' : '#e2bd69', danger: isLightTheme ? '#c43838' : '#d85a5a' };
+    if (normalized === 'preset_co2') return { primary: isLightTheme ? '#c97037' : '#dd8f5b', secondary: isLightTheme ? '#6f7686' : '#9ca6b9', info: isLightTheme ? '#a84a5f' : '#c9708a', success: isLightTheme ? '#4fae66' : '#7ac28b', warning: isLightTheme ? '#cfa742' : '#debd6a', danger: isLightTheme ? '#a3384d' : '#c65a75' };
+    if (normalized === 'preset_activity') return { primary: isLightTheme ? '#2f66c2' : '#6f9ee0', secondary: isLightTheme ? '#6f7c93' : '#9dabbe', info: isLightTheme ? '#4f7fc5' : '#7ea8e6', success: isLightTheme ? '#3f8f9f' : '#6fbbcb', warning: isLightTheme ? '#c49a58' : '#d9b57e', danger: isLightTheme ? '#7d5aa8' : '#a384ca' };
+    return {};
+  }
+
+  function getHeatmapPaletteStops(palette, isLightTheme) {
+    const normalized = String(palette || 'classic').toLowerCase();
+    if (normalized === 'soft') return isLightTheme ? [[0, '#f8fafc'], [0.25, '#e9effd'], [0.5, '#c9d8fb'], [0.75, '#9db8f4'], [1, '#6f8fdb']] : [[0, '#1d2438'], [0.25, '#25304a'], [0.5, '#33466e'], [0.75, '#48659b'], [1, '#6d92d1']];
+    if (normalized === 'contrast') return isLightTheme ? [[0, '#f7f7ff'], [0.25, '#b9cbff'], [0.5, '#6f98ff'], [0.75, '#2f6cff'], [1, '#0037c8']] : [[0, '#121a2e'], [0.25, '#1f2f59'], [0.5, '#2c4fa3'], [0.75, '#3f76e5'], [1, '#7fb3ff']];
+    if (normalized === 'ocean') return isLightTheme ? [[0, '#f2fbff'], [0.25, '#cfeefe'], [0.5, '#8dd9f8'], [0.75, '#3abfe6'], [1, '#0d87bd']] : [[0, '#102633'], [0.25, '#164257'], [0.5, '#1f6584'], [0.75, '#2d91b5'], [1, '#62c8ee']];
+    if (normalized === 'sunset') return isLightTheme ? [[0, '#fff6ef'], [0.25, '#ffd8bd'], [0.5, '#ffb380'], [0.75, '#ff7e5f'], [1, '#d94841']] : [[0, '#35211d'], [0.25, '#5a2d26'], [0.5, '#8a4031'], [0.75, '#be5b46'], [1, '#ff9872']];
+    if (normalized === 'forest') return isLightTheme ? [[0, '#f2fbf5'], [0.25, '#d4f0dc'], [0.5, '#9ed7af'], [0.75, '#5faf7a'], [1, '#2d7d53']] : [[0, '#1b2a21'], [0.25, '#24402f'], [0.5, '#316247'], [0.75, '#44845f'], [1, '#76bf91']];
+    if (normalized === 'fire') return isLightTheme ? [[0, '#fff7ef'], [0.25, '#ffe0bf'], [0.5, '#ffb36b'], [0.75, '#ff7d32'], [1, '#d73617']] : [[0, '#2f1f1b'], [0.25, '#4d2a21'], [0.5, '#7a3b26'], [0.75, '#b95624'], [1, '#ff8f46']];
+    if (normalized === 'mono') return isLightTheme ? [[0, '#f7f8fa'], [0.25, '#e0e4ea'], [0.5, '#b5bdc9'], [0.75, '#7f8a9c'], [1, '#495368']] : [[0, '#1c212b'], [0.25, '#2c3340'], [0.5, '#414d60'], [0.75, '#64748b'], [1, '#9aa8bd']];
+    if (normalized === 'neon') return isLightTheme ? [[0, '#f4faff'], [0.25, '#d1efff'], [0.5, '#7dd8ff'], [0.75, '#2ab3ff'], [1, '#006de6']] : [[0, '#0d1d33'], [0.25, '#11335c'], [0.5, '#14548e'], [0.75, '#1a7dd1'], [1, '#5cd6ff']];
+    if (normalized === 'tempdiv') return isLightTheme ? [[0, '#d84b4b'], [0.48, '#f8dada'], [0.5, '#f3f4f6'], [0.52, '#d7f2df'], [1, '#2f9e44']] : [[0, '#ff7777'], [0.48, '#5b2f2f'], [0.5, '#2b3444'], [0.52, '#274835'], [1, '#61d17f']];
+    if (normalized === 'tempsmooth') return isLightTheme ? [[0, '#e79292'], [0.35, '#f2caca'], [0.5, '#f3f4f6'], [0.65, '#cfe9d6'], [1, '#7dc791']] : [[0, '#d67f7f'], [0.35, '#6a4545'], [0.5, '#313d52'], [0.65, '#3e5b47'], [1, '#7dc791']];
+    if (normalized === 'aurora') return isLightTheme ? [[0, '#eefbff'], [0.25, '#d4f3ff'], [0.5, '#b4e5ff'], [0.75, '#9ad6f7'], [1, '#7bb8f0']] : [[0, '#162436'], [0.25, '#1e3a57'], [0.5, '#27577f'], [0.75, '#3773a7'], [1, '#57a1d9']];
+    if (normalized === 'desert') return isLightTheme ? [[0, '#fff8ef'], [0.25, '#fbe5ca'], [0.5, '#f2c896'], [0.75, '#ddab6a'], [1, '#ba8646']] : [[0, '#33261b'], [0.25, '#4f3721'], [0.5, '#734e2b'], [0.75, '#9c6938'], [1, '#c38f58']];
+    if (normalized === 'vintage') return isLightTheme ? [[0, '#f8f4ed'], [0.25, '#e7decf'], [0.5, '#d2c1a8'], [0.75, '#b79f7c'], [1, '#8f7758']] : [[0, '#2b241f'], [0.25, '#40352c'], [0.5, '#5a4a3c'], [0.75, '#79644f'], [1, '#a08468']];
+    if (normalized === 'ice') return isLightTheme ? [[0, '#f2fbff'], [0.25, '#d9f2ff'], [0.5, '#b3e6ff'], [0.75, '#7fd2f7'], [1, '#43b8e8']] : [[0, '#11242f'], [0.25, '#1a3a4a'], [0.5, '#245a70'], [0.75, '#2f7e99'], [1, '#4eb0d1']];
+    if (normalized === 'berry') return isLightTheme ? [[0, '#fff3fa'], [0.25, '#ffd9ef'], [0.5, '#ffb4dc'], [0.75, '#e98ec3'], [1, '#c55ca2']] : [[0, '#331a2d'], [0.25, '#4d2342'], [0.5, '#70305f'], [0.75, '#954482'], [1, '#c06db0']];
+    if (normalized === 'mint') return isLightTheme ? [[0, '#f2fff9'], [0.25, '#d8f7ea'], [0.5, '#b1ecd3'], [0.75, '#7ed7b4'], [1, '#45b58b']] : [[0, '#162a22'], [0.25, '#1f3f33'], [0.5, '#2a5e4a'], [0.75, '#378167'], [1, '#55b28e']];
+    if (normalized === 'preset_temperature') return isLightTheme ? [[0, '#2f6ed8'], [0.35, '#9fc2ff'], [0.5, '#f3f4f6'], [0.65, '#ffc8a1'], [1, '#d84b3f']] : [[0, '#4d85e6'], [0.35, '#6f9ee8'], [0.5, '#2e374a'], [0.65, '#c7855a'], [1, '#ef6f61']];
+    if (normalized === 'preset_humidity') return isLightTheme ? [[0, '#d5a45c'], [0.35, '#e7d38f'], [0.55, '#7fbe7f'], [0.75, '#58a7b7'], [1, '#2d74b8']] : [[0, '#b58f5e'], [0.35, '#8d8a5a'], [0.55, '#5c9960'], [0.75, '#447f8a'], [1, '#3d7dc2']];
+    if (normalized === 'preset_power') return isLightTheme ? [[0, '#55b07a'], [0.35, '#9ac76a'], [0.6, '#e0b84e'], [0.8, '#de8242'], [1, '#c43838']] : [[0, '#4a9b6c'], [0.35, '#7ca85b'], [0.6, '#b08f45'], [0.8, '#bc6b3a'], [1, '#d95353']];
+    if (normalized === 'preset_co2') return isLightTheme ? [[0, '#4fae66'], [0.45, '#93c86d'], [0.7, '#ddb84d'], [0.85, '#d78042'], [1, '#a3384d']] : [[0, '#59b971'], [0.45, '#7fb45f'], [0.7, '#b08e46'], [0.85, '#b8643e'], [1, '#c65a75']];
+    if (normalized === 'preset_activity') return isLightTheme ? [[0, '#eef2f7'], [0.4, '#c5d3e6'], [0.65, '#89a8d6'], [0.85, '#4f7fc5'], [1, '#1e56a8']] : [[0, '#243044'], [0.4, '#30435f'], [0.65, '#406092'], [0.85, '#4e7dc2'], [1, '#75a7f0']];
+    return isLightTheme ? [[0, '#f5f7ff'], [0.25, '#dbe4ff'], [0.5, '#adc4ff'], [0.75, '#5d87ff'], [1, '#1e4ed8']] : [[0, '#1d2438'], [0.25, '#2b3d66'], [0.5, '#385ea6'], [0.75, '#4e88e0'], [1, '#88b3ff']];
+  }
+
   function colors() {
     const body = document.querySelector('[data-tag="body"]') || document.body;
     const css = getComputedStyle(body);
-    return {
+    const base = {
       primary: css.getPropertyValue('--bs-primary').trim() || '#0d6efd',
       success: css.getPropertyValue('--bs-success').trim() || '#198754',
       info: css.getPropertyValue('--bs-info').trim() || '#0dcaf0',
@@ -32,10 +99,32 @@
       bg: css.getPropertyValue('--bs-body-bg').trim() || '#fff',
       border: css.getPropertyValue('--bs-border-color').trim() || '#dee2e6'
     };
+    const palette = widgetConfig.chart_palette || 'classic';
+    const isLightTheme = getThemeBrightness(base.bg) > 170;
+    return {
+      ...base,
+      ...getChartPaletteOverrides(palette, isLightTheme),
+      palette,
+      isLightTheme
+    };
   }
 
-  function applyTheme() {
+  function applyTheme(useColorTheme) {
+    const useTheme = useColorTheme !== false;
     const c = colors();
+    if (!useTheme) {
+      Highcharts.setOptions({
+        time: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+        colors: [c.primary, c.success, c.info, c.warning, c.danger, c.secondary],
+        chart: { backgroundColor: '#ffffff', style: { color: '#333333' } },
+        title: { style: { color: '#333333' } },
+        xAxis: { lineColor: '#ccd6eb', tickColor: '#ccd6eb', labels: { style: { color: '#333333' } } },
+        yAxis: { gridLineColor: '#e6e6e6', lineColor: '#ccd6eb', tickColor: '#ccd6eb', labels: { style: { color: '#333333' } } },
+        legend: { itemStyle: { color: '#333333' } },
+        tooltip: { backgroundColor: '#ffffff', borderColor: '#ccd6eb', style: { color: '#333333' } }
+      });
+      return;
+    }
     Highcharts.setOptions({
       time: { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
       colors: [c.primary, c.success, c.info, c.warning, c.danger, c.secondary],
@@ -286,7 +375,7 @@
   }
 
   function createChart() {
-    applyTheme();
+    applyTheme(widgetConfig.use_color_theme !== false);
     const c = colors();
     const built = buildSeries();
     if (!built.series.length) {
@@ -316,12 +405,13 @@
     if (built.widgetType === 'heatmap24') {
       const dayLabels = ['{{ _("Mon") }}', '{{ _("Tue") }}', '{{ _("Wed") }}', '{{ _("Thu") }}', '{{ _("Fri") }}', '{{ _("Sat") }}', '{{ _("Sun") }}'];
       const heatmap = buildHeatmap(built.series.map((s) => s.rawData || []));
+      const heatmapStops = getHeatmapPaletteStops(c.palette, c.isLightTheme);
       Highcharts.chart(chartContainerId, {
         chart: { type: 'heatmap', height: chartHeight() },
         title: { text: widgetConfig.name },
         xAxis: { categories: Array.from({ length: 24 }, (_, i) => `${i}:00`) },
         yAxis: { categories: dayLabels, reversed: true, title: { text: null } },
-        colorAxis: { min: 0, max: Math.max(1, heatmap.maxCount) },
+        colorAxis: { min: 0, max: Math.max(1, heatmap.maxCount), stops: heatmapStops },
         series: [{ name: '{{ _("Activity") }}', data: heatmap.points }],
         exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
         credits: { enabled: false }
@@ -396,10 +486,25 @@
       return;
     }
 
+    const samplePayload = Object.values(payloads).find(Boolean);
+    const pr = samplePayload && samplePayload.range;
+    const xAxisRange = {};
+    if (pr) {
+      const b = pr.dt_begin ? Date.parse(pr.dt_begin) : NaN;
+      const e = pr.dt_end ? Date.parse(pr.dt_end) : NaN;
+      if (Number.isFinite(b)) xAxisRange.min = b;
+      if (Number.isFinite(e)) xAxisRange.max = e;
+      if (xAxisRange.min != null && xAxisRange.max != null && xAxisRange.min >= xAxisRange.max) {
+        delete xAxisRange.min;
+        delete xAxisRange.max;
+      }
+    }
+    const xAxisDatetime = { type: 'datetime', ordinal: false, ...xAxisRange };
+
     const options = {
       chart: { renderTo: chartContainerId, height: chartHeight() },
       title: { text: widgetConfig.name },
-      xAxis: { type: 'datetime' },
+      xAxis: xAxisDatetime,
       yAxis: built.mode === 'state'
         ? { title: { text: null }, categories: built.categories }
         : { title: { text: null } },
@@ -420,7 +525,7 @@
       const fallbackOptions = {
         chart: { renderTo: chartContainerId, height: chartHeight(), type: 'line' },
         title: { text: widgetConfig.name },
-        xAxis: { type: 'datetime' },
+        xAxis: xAxisDatetime,
         yAxis: built.mode === 'state'
           ? { title: { text: null }, categories: built.categories }
           : { title: { text: null } },

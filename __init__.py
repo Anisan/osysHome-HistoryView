@@ -793,10 +793,12 @@ class HistoryView(BasePlugin):
             properties_str = flask_request.form.get("properties", "")
             properties_json = flask_request.form.get("properties_json", "")
             chart_type = flask_request.form.get("chart_type", "line")
+            chart_palette = flask_request.form.get("chart_palette", "classic")
             show_legend = flask_request.form.get("show_legend") == "on"
             show_navigator = flask_request.form.get("show_navigator") == "on"
             show_range_selector = flask_request.form.get("show_range_selector") == "on"
             show_context_menu = flask_request.form.get("show_context_menu") == "on"
+            use_color_theme = flask_request.form.get("use_color_theme") == "on"
 
             properties = []
             if properties_json:
@@ -828,10 +830,12 @@ class HistoryView(BasePlugin):
                                 "period": period,
                                 "properties": properties,
                                 "chart_type": chart_type,
+                                "chart_palette": chart_palette,
                                 "show_legend": show_legend,
                                 "show_navigator": show_navigator,
                                 "show_range_selector": show_range_selector,
                                 "show_context_menu": show_context_menu,
+                                "use_color_theme": use_color_theme,
                             }
                         )
                         widget.pop("height", None)
@@ -844,10 +848,12 @@ class HistoryView(BasePlugin):
                         "period": period,
                         "properties": properties,
                         "chart_type": chart_type,
+                        "chart_palette": chart_palette,
                         "show_legend": show_legend,
                         "show_navigator": show_navigator,
                         "show_range_selector": show_range_selector,
                         "show_context_menu": show_context_menu,
+                        "use_color_theme": use_color_theme,
                     }
                 )
 

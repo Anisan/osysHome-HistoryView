@@ -2085,6 +2085,17 @@
         ? "area"
         : selectedChartType;
     const seriesStep = isStepMode ? "left" : undefined;
+    const payloadRange = state.payload.range || {};
+    const rangeBeginMs = payloadRange.dt_begin ? Date.parse(payloadRange.dt_begin) : NaN;
+    const rangeEndMs = payloadRange.dt_end ? Date.parse(payloadRange.dt_end) : NaN;
+    const xAxisRange = {};
+    if (Number.isFinite(rangeBeginMs)) xAxisRange.min = rangeBeginMs;
+    if (Number.isFinite(rangeEndMs)) xAxisRange.max = rangeEndMs;
+    if (xAxisRange.min != null && xAxisRange.max != null && xAxisRange.min >= xAxisRange.max) {
+      delete xAxisRange.min;
+      delete xAxisRange.max;
+    }
+    const xAxisDatetime = { type: "datetime", ordinal: false, ...xAxisRange };
     let chartOptions;
     let caption = "";
 
@@ -2093,7 +2104,7 @@
       chartOptions = {
         chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
         title: { text: state.payload.property_label },
-        xAxis: { type: "datetime" },
+        xAxis: xAxisDatetime,
         yAxis: {
           min: 0,
           max: 2,
@@ -2171,7 +2182,7 @@
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
-          xAxis: { type: "datetime" },
+          xAxis: xAxisDatetime,
           yAxis: {
             title: { text: "{{ _('Value') }}" },
             labels: mode === "boolean" ? { formatter: function () { return this.value === 1 ? "True" : "False"; } } : {},
@@ -2206,7 +2217,7 @@
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
-          xAxis: { type: "datetime" },
+          xAxis: xAxisDatetime,
           yAxis: {
             title: { text: "{{ _('Value') }}" },
             plotLines: [
@@ -2242,7 +2253,7 @@
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
-          xAxis: { type: "datetime" },
+          xAxis: xAxisDatetime,
           yAxis: { title: { text: "{{ _('Value') }}" } },
           series: [{ name: "OHLC", type: "ohlc", data: ohlcData }],
           navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
@@ -2445,7 +2456,7 @@
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
-          xAxis: { type: "datetime" },
+          xAxis: xAxisDatetime,
           yAxis: {
             title: { text: "{{ _('Value') }}" },
             labels: mode === "boolean" ? { formatter: function () { return this.value === 1 ? "True" : "False"; } } : {},
@@ -2490,7 +2501,7 @@
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
-          xAxis: { type: "datetime" },
+          xAxis: xAxisDatetime,
           yAxis: { title: { text: historyText.deltaAxis } },
           plotOptions: {
             series: {
@@ -2523,7 +2534,7 @@
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
-          xAxis: { type: "datetime" },
+          xAxis: xAxisDatetime,
           yAxis: { title: { text: historyText.waterfallAxis } },
           plotOptions: {
             column: { colorByPoint: true },
@@ -2593,7 +2604,7 @@
       chartOptions = {
         chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
         title: { text: state.payload.property_label },
-        xAxis: { type: "datetime" },
+        xAxis: xAxisDatetime,
         yAxis: {
           title: { text: "{{ _('Value') }}" },
           labels: mode === "boolean" ? { formatter: function () { return this.value === 1 ? "True" : "False"; } } : {},
@@ -2639,7 +2650,7 @@
     chartOptions = {
       chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
       title: { text: state.payload.property_label },
-      xAxis: { type: "datetime" },
+      xAxis: xAxisDatetime,
       yAxis: {
         title: { text: "{{ _('State') }}" },
         categories: seriesData.state_categories || []

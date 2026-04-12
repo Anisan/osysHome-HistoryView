@@ -143,6 +143,34 @@
             <option value="pie">{{ _('Pie') }}</option>
           </select>
         </div>
+
+        <div class="mb-3">
+          <label for="chart_palette" class="form-label">{{ _('Palette') }}</label>
+          <select class="form-select" id="chart_palette" name="chart_palette" v-model="formData.chart_palette">
+            <option value="classic">{{ _('Classic') }}</option>
+            <option value="soft">{{ _('Soft') }}</option>
+            <option value="contrast">{{ _('Contrast') }}</option>
+            <option value="ocean">{{ _('Ocean') }}</option>
+            <option value="sunset">{{ _('Sunset') }}</option>
+            <option value="forest">{{ _('Forest') }}</option>
+            <option value="fire">{{ _('Fire') }}</option>
+            <option value="mono">{{ _('Monochrome') }}</option>
+            <option value="neon">{{ _('Neon') }}</option>
+            <option value="aurora">{{ _('Aurora') }}</option>
+            <option value="desert">{{ _('Desert') }}</option>
+            <option value="vintage">{{ _('Vintage') }}</option>
+            <option value="ice">{{ _('Ice') }}</option>
+            <option value="berry">{{ _('Berry') }}</option>
+            <option value="mint">{{ _('Mint') }}</option>
+            <option value="tempdiv">{{ _('Temperature +/-') }}</option>
+            <option value="tempsmooth">{{ _('Temperature Smooth') }}</option>
+            <option value="preset_temperature">{{ _('Preset: Temperature') }}</option>
+            <option value="preset_humidity">{{ _('Preset: Humidity') }}</option>
+            <option value="preset_power">{{ _('Preset: Power') }}</option>
+            <option value="preset_co2">{{ _('Preset: CO2') }}</option>
+            <option value="preset_activity">{{ _('Preset: Activity') }}</option>
+          </select>
+        </div>
         
         <div class="mb-3">
           <div class="form-check">
@@ -179,6 +207,15 @@
             </label>
           </div>
         </div>
+
+        <div class="mb-3">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="use_color_theme" name="use_color_theme" v-model="formData.use_color_theme">
+            <label class="form-check-label" for="use_color_theme">
+              {{ _('Use Color Theme') }}
+            </label>
+          </div>
+        </div>
         
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary">
@@ -205,10 +242,12 @@ new Vue({
       name: '',
       period: 24,
       chart_type: 'line',
+      chart_palette: 'classic',
       show_legend: true,
       show_navigator: true,
       show_range_selector: true,
       show_context_menu: false,
+      use_color_theme: true,
       properties: [
         { object: null, property: null, chart_type: '', color: '' }
       ]
@@ -291,10 +330,12 @@ new Vue({
       this.formData.name = this.widget_edit.name || '';
       this.formData.period = this.widget_edit.period || 24;
       this.formData.chart_type = this.widget_edit.chart_type || 'line';
+      this.formData.chart_palette = this.widget_edit.chart_palette || 'classic';
       this.formData.show_legend = this.widget_edit.show_legend !== false;
       this.formData.show_navigator = this.widget_edit.show_navigator !== false;
       this.formData.show_range_selector = this.widget_edit.show_range_selector !== false;
       this.formData.show_context_menu = this.widget_edit.show_context_menu === true;
+      this.formData.use_color_theme = this.widget_edit.use_color_theme !== false;
       
       // Parse existing properties
       if (this.widget_edit.properties && this.widget_edit.properties.length > 0) {
