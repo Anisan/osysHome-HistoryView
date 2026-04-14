@@ -171,6 +171,19 @@
             <option value="preset_activity">{{ _('Preset: Activity') }}</option>
           </select>
         </div>
+
+        <div class="mb-3">
+          <label for="chart_bucket" class="form-label">
+            <span class="d-inline-flex align-items-center gap-2">
+              <span>{{ _('Chart Detail') }}</span>
+              <span class="history-help-icon" title="{{ _('Chart detail description') }}" aria-label="{{ _('Chart detail description') }}" tabindex="0">?</span>
+            </span>
+          </label>
+          <select class="form-select" id="chart_bucket" name="chart_bucket" v-model="formData.chart_bucket">
+            <option value="auto">{{ _('Auto (balanced)') }}</option>
+            <option value="raw">{{ _('Raw (all points)') }}</option>
+          </select>
+        </div>
         
         <div class="mb-3">
           <div class="form-check">
@@ -243,6 +256,7 @@ new Vue({
       period: 24,
       chart_type: 'line',
       chart_palette: 'classic',
+      chart_bucket: 'auto',
       show_legend: true,
       show_navigator: true,
       show_range_selector: true,
@@ -331,6 +345,7 @@ new Vue({
       this.formData.period = this.widget_edit.period || 24;
       this.formData.chart_type = this.widget_edit.chart_type || 'line';
       this.formData.chart_palette = this.widget_edit.chart_palette || 'classic';
+      this.formData.chart_bucket = this.widget_edit.chart_bucket || 'auto';
       this.formData.show_legend = this.widget_edit.show_legend !== false;
       this.formData.show_navigator = this.widget_edit.show_navigator !== false;
       this.formData.show_range_selector = this.widget_edit.show_range_selector !== false;

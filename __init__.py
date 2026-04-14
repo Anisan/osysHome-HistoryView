@@ -244,11 +244,24 @@ class HistoryView(BasePlugin):
 
         points = []
         for bucket_key in sorted(grouped):
-            group = grouped[bucket_key]
-            ts = bucket_key * bucket_seconds * 1000
-            avg_value = sum(item["numeric_value"] for item in group) / len(group)
-            points.append([int(ts), round(avg_value, 4)])
+            group = sorted(grouped[bucket_key], key=lambda item: item["timestamp"])
+            if not group:
+                continue
+            # Preserve outliers (for example, short zero spikes) so aggregated
+            # ranges don't hide values that are visible in the raw table.
+            first = group[0]
+            last = group[-1]
+            min_item = min(group, key=lambda item: item["numeric_value"])
+            max_item = max(group, key=lambda item: item["numeric_value"])
+            bucket_points = {
+                (int(first["timestamp"]), round(first["numeric_value"], 4)),
+                (int(last["timestamp"]), round(last["numeric_value"], 4)),
+                (int(min_item["timestamp"]), round(min_item["numeric_value"], 4)),
+                (int(max_item["timestamp"]), round(max_item["numeric_value"], 4)),
+            }
+            points.extend([[ts, value] for ts, value in sorted(bucket_points, key=lambda item: item[0])])
 
+        points.sort(key=lambda point: point[0])
         return {"series": points, "bucket": resolved_bucket}
 
     def _build_state_series(self, timeline_entries):
@@ -669,6 +682,9 @@ class HistoryView(BasePlugin):
             return None
 
         dt_begin, dt_end = self._resolve_range(period=widget_config.get("period", 24))
+        widget_bucket = str(widget_config.get("chart_bucket", "auto") or "auto").strip().lower()
+        if widget_bucket not in {"auto", "raw"}:
+            widget_bucket = "auto"
         raw_properties = widget_config.get("properties", [])
         properties = []
         for prop in raw_properties:
@@ -687,7 +703,14 @@ class HistoryView(BasePlugin):
         properties_payloads = {}
         for item in properties:
             object_name, property_name = item["name"].split(".", 1)
-            payload = self._build_property_payload(object_name, property_name, dt_begin, dt_end, include_compare=False)
+            payload = self._build_property_payload(
+                object_name,
+                property_name,
+                dt_begin,
+                dt_end,
+                bucket=widget_bucket,
+                include_compare=False,
+            )
             payload["widget_meta"] = {"chart_type": item.get("chart_type"), "color": item.get("color")}
             properties_payloads[item["name"]] = payload
 
@@ -794,6 +817,9 @@ class HistoryView(BasePlugin):
             properties_json = flask_request.form.get("properties_json", "")
             chart_type = flask_request.form.get("chart_type", "line")
             chart_palette = flask_request.form.get("chart_palette", "classic")
+            chart_bucket = flask_request.form.get("chart_bucket", "auto").strip().lower()
+            if chart_bucket not in {"auto", "raw"}:
+                chart_bucket = "auto"
             show_legend = flask_request.form.get("show_legend") == "on"
             show_navigator = flask_request.form.get("show_navigator") == "on"
             show_range_selector = flask_request.form.get("show_range_selector") == "on"
@@ -831,6 +857,7 @@ class HistoryView(BasePlugin):
                                 "properties": properties,
                                 "chart_type": chart_type,
                                 "chart_palette": chart_palette,
+                                "chart_bucket": chart_bucket,
                                 "show_legend": show_legend,
                                 "show_navigator": show_navigator,
                                 "show_range_selector": show_range_selector,
@@ -849,6 +876,7 @@ class HistoryView(BasePlugin):
                         "properties": properties,
                         "chart_type": chart_type,
                         "chart_palette": chart_palette,
+                        "chart_bucket": chart_bucket,
                         "show_legend": show_legend,
                         "show_navigator": show_navigator,
                         "show_range_selector": show_range_selector,

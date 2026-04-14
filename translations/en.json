@@ -240,4 +240,8 @@
     ,"Preset: Power":  "Preset: Power"
     ,"Preset: CO2":  "Preset: CO2"
     ,"Preset: Activity":  "Preset: Activity"
+    ,"Chart Detail":  "Chart Detail"
+    ,"Auto (balanced)":  "Auto (balanced)"
+    ,"Raw (all points)":  "Raw (all points)"
+    ,"Chart detail description":  "Controls chart data aggregation level. Auto merges nearby points (faster on large ranges), Raw shows every history record without aggregation."
 }

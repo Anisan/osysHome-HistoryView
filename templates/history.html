@@ -216,6 +216,41 @@
   .history-unavailable {
     margin-top: 0.75rem;
   }
+  .history-tab-loading {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.92rem;
+    margin-bottom: 0.75rem;
+  }
+  .history-tab-loading.is-visible {
+    display: inline-flex;
+  }
+  .history-card-loading {
+    display: none;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.9rem;
+    margin-bottom: 0.55rem;
+  }
+  .history-card-loading.is-visible {
+    display: inline-flex;
+  }
+  .history-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+  }
+  .history-pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
 </style>
 
 <div id="history_view_page">
@@ -240,6 +275,9 @@
           <span class="history-toolbar-label">{{ _('Interval') }}</span>
           <div class="history-periods">
             <button class="btn btn-outline-secondary btn-sm" data-range="1">1h</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="3">3h</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="6">6h</button>
+            <button class="btn btn-outline-secondary btn-sm" data-range="12">12h</button>
             <button class="btn btn-outline-secondary btn-sm" data-range="24">24h</button>
             <button class="btn btn-outline-secondary btn-sm" data-range="168">7d</button>
             <button class="btn btn-outline-secondary btn-sm" data-range="336">14d</button>
@@ -356,6 +394,18 @@
                   <option value="preset_activity">{{ _('Preset: Activity') }}</option>
                 </select>
               </div>
+              <div style="min-width: 220px;">
+                <label class="form-label mb-1">
+                  <span class="history-metric-label">
+                    <span>{{ _('Chart Detail') }}</span>
+                    <span id="chartBucketHelp" class="history-help-icon" title="{{ _('Chart detail description') }}" aria-label="{{ _('Chart detail description') }}" tabindex="0">?</span>
+                  </span>
+                </label>
+                <select id="chartBucket" class="form-select form-select-sm">
+                  <option value="auto">{{ _('Auto (balanced)') }}</option>
+                  <option value="raw">{{ _('Raw (all points)') }}</option>
+                </select>
+              </div>
             </div>
           </div>
           <div id="mainChart" class="history-chart"></div>
@@ -364,14 +414,30 @@
         </div>
 
         <div class="tab-pane fade" id="history-tab-analytics" role="tabpanel">
+          <div class="history-tab-loading" id="analyticsTabLoading">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>{{ _('Building analytics') }}</span>
+          </div>
           <div id="analyticsUnavailableNote" class="alert alert-secondary history-unavailable d-none"></div>
           <div id="analyticsContent">
+          <div class="history-card-loading" id="analyticsStatsLoading">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>{{ _('Building metrics') }}</span>
+          </div>
           <div class="history-summary mb-3" id="analyticsStatsCards"></div>
+          <div class="history-card-loading" id="analyticsBehaviorLoading">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>{{ _('Building behavior cards') }}</span>
+          </div>
           <div class="history-summary mb-3" id="analyticsBehaviorCards"></div>
           <div class="history-grid-2 mb-3">
             <div class="card">
               <div class="card-body">
                 <h6 class="mb-2">{{ _('Hourly Activity') }}</h6>
+                <div class="history-card-loading" id="analyticsHourlyLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>{{ _('Building chart') }}</span>
+                </div>
                 <div id="analyticsHourlyChart" class="history-mini-chart"></div>
               </div>
             </div>
@@ -380,6 +446,10 @@
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <h6 class="mb-0" id="analyticsProfileTitle">{{ _('Profile') }}</h6>
                   <small class="history-muted" id="analyticsProfileCaption"></small>
+                </div>
+                <div class="history-card-loading" id="analyticsProfileLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>{{ _('Building chart') }}</span>
                 </div>
                 <div id="analyticsProfileChart" class="history-mini-chart"></div>
               </div>
@@ -391,6 +461,10 @@
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <h6 class="mb-0">{{ _('Top Jumps') }}</h6>
                   <small class="history-muted">{{ _('Largest value changes') }}</small>
+                </div>
+                <div class="history-card-loading" id="analyticsTopJumpsLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>{{ _('Building table') }}</span>
                 </div>
                 <div class="table-responsive">
                   <table class="table table-sm align-middle mb-0">
@@ -412,18 +486,30 @@
             <div class="card">
               <div class="card-body">
                 <h6 class="mb-2">{{ _('By Sources') }}</h6>
+                <div class="history-card-loading" id="analyticsSourceLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>{{ _('Building chart') }}</span>
+                </div>
                 <div id="sourceChart" class="history-mini-chart"></div>
               </div>
             </div>
             <div class="card">
               <div class="card-body">
                 <h6 class="mb-2">{{ _('By Values') }}</h6>
+                <div class="history-card-loading" id="analyticsValueLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>{{ _('Building chart') }}</span>
+                </div>
                 <div id="valueChart" class="history-mini-chart"></div>
               </div>
             </div>
             <div class="card">
               <div class="card-body">
                 <h6 class="mb-2">{{ _('State Duration') }}</h6>
+                <div class="history-card-loading" id="analyticsDurationLoading">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>{{ _('Building chart') }}</span>
+                </div>
                 <div id="durationChart" class="history-mini-chart"></div>
               </div>
             </div>
@@ -432,6 +518,10 @@
         </div>
 
         <div class="tab-pane fade" id="history-tab-table" role="tabpanel">
+          <div class="history-tab-loading" id="tableTabLoading">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>{{ _('Building table') }}</span>
+          </div>
           <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
             <div style="min-width: 200px;">
               <label class="form-label">{{ _('Search') }}</label>
@@ -447,6 +537,22 @@
               <input class="form-check-input" type="checkbox" id="onlyChanges">
               <label class="form-check-label" for="onlyChanges">{{ _('Only changes') }}</label>
             </div>
+            <div class="ms-auto d-flex align-items-end gap-2 flex-wrap justify-content-end">
+              <div class="history-pagination-controls">
+              <label for="tablePageSize" class="history-muted mb-0">{{ _('Rows') }}</label>
+              <select id="tablePageSize" class="form-select form-select-sm" style="width: 110px;">
+                <option value="100">100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+              </select>
+              </div>
+              <div class="history-pagination-controls">
+                <button id="tablePrevBtn" class="btn btn-outline-secondary btn-sm">{{ _('Previous') }}</button>
+                <span id="tablePageInfo" class="history-muted">-</span>
+                <button id="tableNextBtn" class="btn btn-outline-secondary btn-sm">{{ _('Next') }}</button>
+              </div>
+            </div>
           </div>
           <div class="table-responsive">
             <table class="table table-striped history-table">
@@ -454,8 +560,9 @@
                 <tr>
                   <th class="history-sortable" data-sort-key="added">{{ _('Changed') }}<span class="sort-indicator"></span></th>
                   <th class="history-sortable" data-sort-key="source">{{ _('Source') }}<span class="sort-indicator"></span></th>
-                  <th class="history-sortable" data-sort-key="transition">{{ _('Transition') }}<span class="sort-indicator"></span></th>
-                  <th class="history-sortable" data-sort-key="delta">{{ _('Delta') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable d-none" data-sort-key="transition" id="historyTableColTransition">{{ _('Transition') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable d-none" data-sort-key="delta" id="historyTableColDelta">{{ _('Delta') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable d-none" data-sort-key="value" id="historyTableColValue">{{ _('Value') }}<span class="sort-indicator"></span></th>
                   <th class="history-sortable" data-sort-key="duration">{{ _('State duration') }}<span class="sort-indicator"></span></th>
                   <th class="history-sortable" data-sort-key="current_for">{{ _('Current for') }}<span class="sort-indicator"></span></th>
                   <th></th>
@@ -507,6 +614,15 @@
     themeRefreshTimer: null,
     chartHeight: 420,
     mainChart: null,
+    historyCache: new Map(),
+    payloadVersion: 0,
+    tableRenderedVersion: -1,
+    analyticsRenderedVersion: -1,
+    tableRenderInProgressVersion: -1,
+    analyticsRenderInProgressVersion: -1,
+    backgroundWarmupTimer: null,
+    tablePage: 1,
+    tablePageSize: 250,
     uiPrefs: null,
     tableSort: {
       key: "added",
@@ -655,6 +771,7 @@
   const CHART_HEIGHT_MIN = 260;
   const CHART_HEIGHT_MAX = 1000;
   const CHART_HEIGHT_STORAGE_KEY = "historyView.mainChartHeight";
+  const CHART_BUCKET_STORAGE_KEY = "historyView.chartBucket";
 
   function qs(id) {
     return document.getElementById(id);
@@ -668,12 +785,15 @@
     const fallback = {
       chartType: "line",
       chartPalette: "classic",
+      chartBucket: "auto",
       dtBegin: "",
       dtEnd: "",
       activeRange: null,
+      activeTab: "#history-tab-charts",
       searchQuery: "",
       sourceFilter: "",
       onlyChanges: false,
+      tablePageSize: 250,
       tableSortKey: "added",
       tableSortDir: "desc"
     };
@@ -681,18 +801,22 @@
       const raw = window.localStorage.getItem(getPropertyStorageKey());
       if (!raw) return fallback;
       const parsed = JSON.parse(raw);
+      const globalBucket = window.localStorage.getItem(CHART_BUCKET_STORAGE_KEY);
       const paletteCandidate = typeof parsed.chartPalette === "string" && parsed.chartPalette
         ? parsed.chartPalette
         : (typeof parsed.heatmapPalette === "string" && parsed.heatmapPalette ? parsed.heatmapPalette : fallback.chartPalette);
       return {
         chartType: typeof parsed.chartType === "string" && parsed.chartType ? parsed.chartType : fallback.chartType,
         chartPalette: paletteCandidate,
+        chartBucket: typeof globalBucket === "string" && globalBucket ? globalBucket : (typeof parsed.chartBucket === "string" && parsed.chartBucket ? parsed.chartBucket : fallback.chartBucket),
         dtBegin: typeof parsed.dtBegin === "string" ? parsed.dtBegin : fallback.dtBegin,
         dtEnd: typeof parsed.dtEnd === "string" ? parsed.dtEnd : fallback.dtEnd,
         activeRange: parsed.activeRange == null ? null : String(parsed.activeRange),
+        activeTab: typeof parsed.activeTab === "string" && parsed.activeTab ? parsed.activeTab : fallback.activeTab,
         searchQuery: typeof parsed.searchQuery === "string" ? parsed.searchQuery : fallback.searchQuery,
         sourceFilter: typeof parsed.sourceFilter === "string" ? parsed.sourceFilter : fallback.sourceFilter,
         onlyChanges: Boolean(parsed.onlyChanges),
+        tablePageSize: [100, 250, 500, 1000].includes(Number(parsed.tablePageSize)) ? Number(parsed.tablePageSize) : fallback.tablePageSize,
         tableSortKey: typeof parsed.tableSortKey === "string" ? parsed.tableSortKey : fallback.tableSortKey,
         tableSortDir: parsed.tableSortDir === "asc" ? "asc" : fallback.tableSortDir
       };
@@ -704,23 +828,29 @@
   function saveUiPrefs() {
     const chartType = qs("chartType");
     const chartPalette = qs("chartPalette");
+    const chartBucket = qs("chartBucket");
     const dtBegin = qs("dtBegin");
     const dtEnd = qs("dtEnd");
     const searchQuery = qs("searchQuery");
     const sourceFilter = qs("sourceFilter");
     const onlyChanges = qs("onlyChanges");
+    const tablePageSize = qs("tablePageSize");
     state.uiPrefs = {
       chartType: chartType ? chartType.value : state.uiPrefs?.chartType || "line",
       chartPalette: chartPalette ? chartPalette.value : state.uiPrefs?.chartPalette || "classic",
+      chartBucket: chartBucket ? chartBucket.value : state.uiPrefs?.chartBucket || "auto",
       dtBegin: dtBegin ? dtBegin.value : state.uiPrefs?.dtBegin || "",
       dtEnd: dtEnd ? dtEnd.value : state.uiPrefs?.dtEnd || "",
       activeRange: state.activeRange == null ? null : String(state.activeRange),
+      activeTab: state.uiPrefs?.activeTab || "#history-tab-charts",
       searchQuery: searchQuery ? searchQuery.value : state.uiPrefs?.searchQuery || "",
       sourceFilter: sourceFilter ? sourceFilter.value : state.uiPrefs?.sourceFilter || "",
       onlyChanges: onlyChanges ? onlyChanges.checked : Boolean(state.uiPrefs?.onlyChanges),
+      tablePageSize: tablePageSize ? Number(tablePageSize.value) || 250 : (state.uiPrefs?.tablePageSize || 250),
       tableSortKey: state.tableSort?.key || "added",
       tableSortDir: state.tableSort?.dir === "asc" ? "asc" : "desc"
     };
+    window.localStorage.setItem(CHART_BUCKET_STORAGE_KEY, state.uiPrefs.chartBucket || "auto");
     window.localStorage.setItem(getPropertyStorageKey(), JSON.stringify(state.uiPrefs));
   }
 
@@ -728,11 +858,13 @@
     if (!state.uiPrefs) return;
     const chartType = qs("chartType");
     const chartPalette = qs("chartPalette");
+    const chartBucket = qs("chartBucket");
     const dtBegin = qs("dtBegin");
     const dtEnd = qs("dtEnd");
     const searchQuery = qs("searchQuery");
     const sourceFilter = qs("sourceFilter");
     const onlyChanges = qs("onlyChanges");
+    const tablePageSize = qs("tablePageSize");
     if (chartType) {
       const hasOption = Array.from(chartType.options).some((option) => option.value === state.uiPrefs.chartType);
       chartType.value = hasOption ? state.uiPrefs.chartType : "line";
@@ -741,11 +873,21 @@
       const hasOption = Array.from(chartPalette.options).some((option) => option.value === state.uiPrefs.chartPalette);
       chartPalette.value = hasOption ? state.uiPrefs.chartPalette : "classic";
     }
+    if (chartBucket) {
+      const hasOption = Array.from(chartBucket.options).some((option) => option.value === state.uiPrefs.chartBucket);
+      chartBucket.value = hasOption ? state.uiPrefs.chartBucket : "auto";
+    }
     if (dtBegin) dtBegin.value = state.uiPrefs.dtBegin || "";
     if (dtEnd) dtEnd.value = state.uiPrefs.dtEnd || "";
     if (searchQuery) searchQuery.value = state.uiPrefs.searchQuery || "";
     if (sourceFilter) sourceFilter.dataset.prefValue = state.uiPrefs.sourceFilter || "";
     if (onlyChanges) onlyChanges.checked = Boolean(state.uiPrefs.onlyChanges);
+    if (tablePageSize) {
+      const allowed = ["100", "250", "500", "1000"];
+      const candidate = String(state.uiPrefs.tablePageSize || 250);
+      tablePageSize.value = allowed.includes(candidate) ? candidate : "250";
+      state.tablePageSize = Number(tablePageSize.value) || 250;
+    }
     state.tableSort = {
       key: state.uiPrefs.tableSortKey || "added",
       dir: state.uiPrefs.tableSortDir === "asc" ? "asc" : "desc"
@@ -754,6 +896,15 @@
       setActiveRange(state.uiPrefs.activeRange);
     }
     updateTableSortHeaders();
+  }
+
+  function activateTab(tabTarget) {
+    const fallback = "#history-tab-charts";
+    const target = typeof tabTarget === "string" && tabTarget ? tabTarget : fallback;
+    const tabButton = document.querySelector(`[data-bs-toggle="tab"][data-bs-target="${target}"]`);
+    if (!tabButton || typeof bootstrap === "undefined" || !bootstrap.Tab) return false;
+    bootstrap.Tab.getOrCreateInstance(tabButton).show();
+    return true;
   }
 
   function toLocalInputValue(date) {
@@ -923,12 +1074,38 @@
   }
 
   function currentQuery() {
+    const chartBucket = qs("chartBucket");
+    return new URLSearchParams({
+      object: state.objectName,
+      property: state.propertyName,
+      dt_begin: qs("dtBegin").value,
+      dt_end: qs("dtEnd").value,
+      bucket: chartBucket ? chartBucket.value : "auto"
+    });
+  }
+
+  function currentBaseQuery() {
     return new URLSearchParams({
       object: state.objectName,
       property: state.propertyName,
       dt_begin: qs("dtBegin").value,
       dt_end: qs("dtEnd").value
     });
+  }
+
+  function getSelectedBucket() {
+    const chartBucket = qs("chartBucket");
+    return chartBucket ? chartBucket.value : "auto";
+  }
+
+  function getCacheKeys(bucket = null) {
+    const selectedBucket = bucket || getSelectedBucket();
+    const base = currentBaseQuery().toString();
+    return {
+      baseKey: base,
+      key: `${base}&bucket=${selectedBucket}`,
+      bucket: selectedBucket
+    };
   }
 
   function setLoading(isLoading) {
@@ -1009,19 +1186,115 @@
     }
   }
 
-  async function loadHistory() {
+  function renderFromPayload() {
+    renderSummary();
+    renderCharts();
+    renderInfo();
+    const tableTab = document.querySelector('[data-bs-target="#history-tab-table"]');
+    if (tableTab?.classList.contains("active")) {
+      ensureTableRendered();
+    }
+    const analyticsTab = document.querySelector('[data-bs-target="#history-tab-analytics"]');
+    if (analyticsTab?.classList.contains("active")) {
+      ensureAnalyticsRendered();
+    }
+    scheduleBackgroundWarmup();
+  }
+
+  function setTabLoading(tab, isLoading) {
+    if (tab === "table") {
+      const el = qs("tableTabLoading");
+      if (el) el.classList.toggle("is-visible", Boolean(isLoading));
+      return;
+    }
+    if (tab === "analytics") {
+      const el = qs("analyticsTabLoading");
+      if (el) el.classList.toggle("is-visible", Boolean(isLoading));
+    }
+  }
+
+  function setAnalyticsCardLoading(id, isLoading) {
+    const el = qs(id);
+    if (!el) return;
+    el.classList.toggle("is-visible", Boolean(isLoading));
+  }
+
+  function setAllAnalyticsCardsLoading(isLoading) {
+    [
+      "analyticsStatsLoading",
+      "analyticsBehaviorLoading",
+      "analyticsHourlyLoading",
+      "analyticsProfileLoading",
+      "analyticsTopJumpsLoading",
+      "analyticsSourceLoading",
+      "analyticsValueLoading",
+      "analyticsDurationLoading"
+    ].forEach((id) => setAnalyticsCardLoading(id, isLoading));
+  }
+
+  function getDecimatedNumericData(data, maxPoints = 1200) {
+    if (!Array.isArray(data) || data.length <= maxPoints) return data || [];
+    const safeMax = Math.max(120, Number(maxPoints) || 1200);
+    const bucketSize = Math.max(2, Math.ceil(data.length / safeMax));
+    const reduced = [];
+    for (let i = 0; i < data.length; i += bucketSize) {
+      const slice = data.slice(i, i + bucketSize);
+      if (!slice.length) continue;
+      const first = slice[0];
+      const last = slice[slice.length - 1];
+      let min = first;
+      let max = first;
+      for (let j = 1; j < slice.length; j += 1) {
+        const point = slice[j];
+        if (Number(point[1]) < Number(min[1])) min = point;
+        if (Number(point[1]) > Number(max[1])) max = point;
+      }
+      reduced.push(first);
+      if (min !== first && min !== last) reduced.push(min);
+      if (max !== first && max !== last && max !== min) reduced.push(max);
+      if (last !== first) reduced.push(last);
+    }
+    reduced.sort((a, b) => Number(a[0]) - Number(b[0]));
+    return reduced;
+  }
+
+  function getMainNumericData(seriesData) {
+    const numericData = Array.isArray(seriesData?.numeric) ? seriesData.numeric : [];
+    if (getSelectedBucket() === "raw") return numericData;
+    return getDecimatedNumericData(numericData);
+  }
+
+  async function loadHistory(forceReload = false) {
     applyTheme();
+    const cacheKeys = getCacheKeys();
+    if (!forceReload) {
+      const cached = state.historyCache.get(cacheKeys.key);
+      if (cached) {
+        state.payload = cached;
+        state.tablePage = 1;
+        state.payloadVersion += 1;
+        state.tableRenderedVersion = -1;
+        state.analyticsRenderedVersion = -1;
+        state.tableRenderInProgressVersion = -1;
+        state.analyticsRenderInProgressVersion = -1;
+        renderFromPayload();
+        return;
+      }
+    }
     setLoading(true);
     try {
       const response = await fetch(`/HistoryView/api/history_data?${currentQuery().toString()}`);
       const data = await response.json();
       if (!data.success) return;
       state.payload = data.result;
-      renderSummary();
-      renderFilters();
-      renderTable();
-      renderCharts();
-      renderInfo();
+      state.tablePage = 1;
+      state.payloadVersion += 1;
+      state.tableRenderedVersion = -1;
+      state.analyticsRenderedVersion = -1;
+      state.tableRenderInProgressVersion = -1;
+      state.analyticsRenderInProgressVersion = -1;
+      state.historyCache.set(cacheKeys.key, data.result);
+      renderFromPayload();
     } finally {
       setLoading(false);
     }
@@ -1116,6 +1389,7 @@
     if (key === "added") return Number(item.timestamp || new Date(item.added || 0).getTime() || 0);
     if (key === "source") return String(item.source || historyText.unknown).toLowerCase();
     if (key === "transition") return String(item.transition || item.display_value || "").toLowerCase();
+    if (key === "value") return String(item.display_value || item.value || "").toLowerCase();
     if (key === "delta") {
       if (item.delta_numeric != null && Number.isFinite(Number(item.delta_numeric))) return Number(item.delta_numeric);
       const parsedDelta = parseNumericClient(item.delta_display);
@@ -1181,6 +1455,7 @@
     } else {
       state.tableSort = { key, dir: "asc" };
     }
+    state.tablePage = 1;
     updateTableSortHeaders();
     saveUiPrefs();
     renderTable();
@@ -1227,21 +1502,56 @@
   function renderTable() {
     const body = qs("historyTableBody");
     if (!body) return;
+    const mode = getEffectiveMode();
+    const isNumericLike = mode === "numeric" || mode === "boolean";
+    const colTransition = qs("historyTableColTransition");
+    const colDelta = qs("historyTableColDelta");
+    const colValue = qs("historyTableColValue");
+    if (colTransition) colTransition.classList.toggle("d-none", !isNumericLike);
+    if (colDelta) colDelta.classList.toggle("d-none", !isNumericLike);
+    if (colValue) colValue.classList.toggle("d-none", isNumericLike);
+    if (!isNumericLike && (state.tableSort?.key === "transition" || state.tableSort?.key === "delta")) {
+      state.tableSort = { key: "value", dir: state.tableSort?.dir === "asc" ? "asc" : "desc" };
+      saveUiPrefs();
+    }
     updateTableSortHeaders();
     const rows = getFilteredEntries();
-    body.innerHTML = rows.map((item) => `
+    const pageSize = Math.max(1, Number(state.tablePageSize) || 250);
+    const totalRows = rows.length;
+    const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+    if (state.tablePage > totalPages) state.tablePage = totalPages;
+    if (state.tablePage < 1) state.tablePage = 1;
+    const startIndex = (state.tablePage - 1) * pageSize;
+    const pageRows = rows.slice(startIndex, startIndex + pageSize);
+    body.innerHTML = pageRows.map((item) => `
       <tr>
         <td>${formatDate(item.added)}</td>
         <td><span class="badge text-bg-secondary">${item.source || historyText.unknown}</span></td>
-        <td class="history-transition">${item.transition || item.display_value}</td>
-        <td>${item.delta_display || "-"}</td>
+        ${isNumericLike
+          ? `<td class="history-transition">${item.transition || item.display_value}</td><td>${item.delta_display || "-"}</td>`
+          : `<td>${item.display_value || item.value || "-"}</td>`
+        }
         <td>${item.duration_label || "-"}</td>
         <td>${item.changed_for_label || "-"}</td>
         <td>
           ${item.id ? `<a href="?op=delete&id=${item.id}&object={{object.id}}&name={{name}}" onclick="return confirm('{{ _('Are you sure?') }}')" class="btn btn-sm btn-danger">{{ _('Delete') }}</a>` : ""}
         </td>
       </tr>
-    `).join("") || `<tr><td colspan="7" class="text-center text-muted">{{ _('No data available') }}</td></tr>`;
+    `).join("") || `<tr><td colspan="${isNumericLike ? 7 : 6}" class="text-center text-muted">{{ _('No data available') }}</td></tr>`;
+    const pageInfo = qs("tablePageInfo");
+    const prevBtn = qs("tablePrevBtn");
+    const nextBtn = qs("tableNextBtn");
+    if (pageInfo) {
+      if (!totalRows) {
+        pageInfo.textContent = "0 / 0";
+      } else {
+        const from = startIndex + 1;
+        const to = Math.min(totalRows, startIndex + pageRows.length);
+        pageInfo.textContent = `${from}-${to} / ${totalRows}`;
+      }
+    }
+    if (prevBtn) prevBtn.disabled = state.tablePage <= 1 || totalRows === 0;
+    if (nextBtn) nextBtn.disabled = state.tablePage >= totalPages || totalRows === 0;
   }
 
   function buildMovingAverageSeries(data, windowSize = 10) {
@@ -2175,7 +2485,7 @@
     }
 
     if (mode === "numeric" || mode === "boolean") {
-      const numericData = seriesData.numeric || [];
+      const numericData = getMainNumericData(seriesData);
       const presetVisuals = mode === "numeric" ? buildPresetVisuals(selectedPalette, numericData, c, isLightTheme) : null;
       if (selectedChartType === "stepmarkers") {
         const useTempPalette = mode === "numeric" && isTemperatureDivergingPalette(selectedPalette);
@@ -2749,16 +3059,19 @@
   function renderSmallCharts() {
     if (!isChartSupportedMode()) return;
     const seriesData = state.payload.series || {};
+    const limitedSource = limitCategorySeries(seriesData.source_pie || [], 14);
+    const limitedValue = limitCategorySeries(seriesData.value_pie || [], 14);
+    const limitedDuration = limitCategorySeries(seriesData.duration_column || [], 20);
     Highcharts.chart("sourceChart", {
       chart: { type: "pie" },
       title: { text: null },
-      series: [{ name: "{{ _('Sources') }}", data: seriesData.source_pie || [] }],
+      series: [{ name: "{{ _('Sources') }}", data: limitedSource }],
       credits: { enabled: false }
     });
     Highcharts.chart("valueChart", {
       chart: { type: "pie" },
       title: { text: null },
-      series: [{ name: "{{ _('Values') }}", data: seriesData.value_pie || [] }],
+      series: [{ name: "{{ _('Values') }}", data: limitedValue }],
       credits: { enabled: false }
     });
     Highcharts.chart("durationChart", {
@@ -2766,7 +3079,73 @@
       title: { text: null },
       xAxis: { type: "category" },
       yAxis: { title: { text: null } },
-      series: [{ name: "{{ _('Duration') }}", data: seriesData.duration_column || [] }],
+      series: [{ name: "{{ _('Duration') }}", data: limitedDuration }],
+      credits: { enabled: false }
+    });
+  }
+
+  function normalizeCategoryPoint(point) {
+    if (Array.isArray(point)) {
+      const name = point[0] == null ? historyText.unknown : String(point[0]);
+      const value = Number(point[1]);
+      return Number.isFinite(value) ? { name, y: value } : null;
+    }
+    if (point && typeof point === "object") {
+      const name = point.name != null ? String(point.name) : historyText.unknown;
+      const value = Number(point.y ?? point.value);
+      return Number.isFinite(value) ? { name, y: value } : null;
+    }
+    return null;
+  }
+
+  function limitCategorySeries(series, limit = 14) {
+    const normalized = (Array.isArray(series) ? series : [])
+      .map((item) => normalizeCategoryPoint(item))
+      .filter(Boolean)
+      .sort((a, b) => b.y - a.y);
+    if (normalized.length <= limit) return normalized;
+    const top = normalized.slice(0, limit);
+    const otherSum = normalized.slice(limit).reduce((sum, item) => sum + item.y, 0);
+    if (otherSum > 0) {
+      top.push({ name: "{{ _('Other') }}", y: Number(otherSum.toFixed(4)) });
+    }
+    return top;
+  }
+
+  function renderSmallChartsOnlySource() {
+    if (!isChartSupportedMode()) return;
+    const seriesData = state.payload.series || {};
+    const limitedSource = limitCategorySeries(seriesData.source_pie || [], 14);
+    Highcharts.chart("sourceChart", {
+      chart: { type: "pie" },
+      title: { text: null },
+      series: [{ name: "{{ _('Sources') }}", data: limitedSource }],
+      credits: { enabled: false }
+    });
+  }
+
+  function renderSmallChartsOnlyValue() {
+    if (!isChartSupportedMode()) return;
+    const seriesData = state.payload.series || {};
+    const limitedValue = limitCategorySeries(seriesData.value_pie || [], 14);
+    Highcharts.chart("valueChart", {
+      chart: { type: "pie" },
+      title: { text: null },
+      series: [{ name: "{{ _('Values') }}", data: limitedValue }],
+      credits: { enabled: false }
+    });
+  }
+
+  function renderSmallChartsOnlyDuration() {
+    if (!isChartSupportedMode()) return;
+    const seriesData = state.payload.series || {};
+    const limitedDuration = limitCategorySeries(seriesData.duration_column || [], 20);
+    Highcharts.chart("durationChart", {
+      chart: { type: "column" },
+      title: { text: null },
+      xAxis: { type: "category" },
+      yAxis: { title: { text: null } },
+      series: [{ name: "{{ _('Duration') }}", data: limitedDuration }],
       credits: { enabled: false }
     });
   }
@@ -2827,20 +3206,26 @@
     const numericValues = numericEntries.map((entry) => entry.numeric_value);
     const minEntry = numericEntries.length ? numericEntries.reduce((best, item) => item.numeric_value < best.numeric_value ? item : best, numericEntries[0]) : null;
     const maxEntry = numericEntries.length ? numericEntries.reduce((best, item) => item.numeric_value > best.numeric_value ? item : best, numericEntries[0]) : null;
+    const mean = numericValues.length
+      ? (numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length)
+      : null;
     const stddev = numericValues.length
       ? Number(Math.sqrt(numericValues.reduce((sum, value) => {
-          const avg = numericValues.reduce((acc, item) => acc + item, 0) / numericValues.length;
-          return sum + ((value - avg) ** 2);
+          return sum + ((value - mean) ** 2);
         }, 0) / numericValues.length).toFixed(4))
       : null;
+    const hourlyValueSums = Array.from({ length: 24 }, () => 0);
+    const hourlyValueCounts = Array.from({ length: 24 }, () => 0);
+    numericEntries.forEach((entry) => {
+      const added = entry.added ? new Date(entry.added) : null;
+      if (!added || Number.isNaN(added.getTime())) return;
+      const hour = added.getHours();
+      hourlyValueSums[hour] += entry.numeric_value;
+      hourlyValueCounts[hour] += 1;
+    });
     const dailyProfile = Array.from({ length: 24 }, (_, hour) => {
-      const hourlyValues = numericEntries
-        .filter((entry) => {
-          const added = entry.added ? new Date(entry.added) : null;
-          return added && !Number.isNaN(added.getTime()) && added.getHours() === hour;
-        })
-        .map((entry) => entry.numeric_value);
-      return [hour, hourlyValues.length ? Number((hourlyValues.reduce((sum, value) => sum + value, 0) / hourlyValues.length).toFixed(4)) : null];
+      const count = hourlyValueCounts[hour];
+      return [hour, count ? Number((hourlyValueSums[hour] / count).toFixed(4)) : null];
     });
     const topJumps = numericEntries
       .filter((entry) => entry.delta_numeric != null)
@@ -3084,7 +3469,6 @@
       `).join("") || `<tr><td colspan="4" class="text-center text-muted">${historyText.noNumericJumps}</td></tr>`;
     }
 
-    renderSmallCharts();
   }
 
   function renderCharts() {
@@ -3097,7 +3481,96 @@
       return;
     }
     renderChartInto("mainChart", false);
-    renderAnalytics();
+  }
+
+  function ensureTableRendered() {
+    if (!state.payload) return;
+    if (state.tableRenderedVersion === state.payloadVersion || state.tableRenderInProgressVersion === state.payloadVersion) return;
+    state.tableRenderInProgressVersion = state.payloadVersion;
+    setTabLoading("table", true);
+    renderFilters();
+    renderTable();
+    state.tableRenderedVersion = state.payloadVersion;
+    state.tableRenderInProgressVersion = -1;
+    setTabLoading("table", false);
+  }
+
+  function ensureAnalyticsRendered() {
+    if (!state.payload) return;
+    if (state.analyticsRenderedVersion === state.payloadVersion || state.analyticsRenderInProgressVersion === state.payloadVersion) return;
+    state.analyticsRenderInProgressVersion = state.payloadVersion;
+    setTabLoading("analytics", true);
+    setAllAnalyticsCardsLoading(true);
+    const targetVersion = state.payloadVersion;
+    const steps = [
+      () => {
+        if (!state.payload || state.payloadVersion !== targetVersion) return false;
+        renderAnalytics();
+        return true;
+      },
+      () => {
+        if (!state.payload || state.payloadVersion !== targetVersion) return false;
+        setAnalyticsCardLoading("analyticsStatsLoading", false);
+        setAnalyticsCardLoading("analyticsBehaviorLoading", false);
+        setAnalyticsCardLoading("analyticsHourlyLoading", false);
+        setAnalyticsCardLoading("analyticsProfileLoading", false);
+        setAnalyticsCardLoading("analyticsTopJumpsLoading", false);
+        return true;
+      },
+      () => {
+        if (!state.payload || state.payloadVersion !== targetVersion) return false;
+        renderSmallChartsOnlySource();
+        setAnalyticsCardLoading("analyticsSourceLoading", false);
+        return true;
+      },
+      () => {
+        if (!state.payload || state.payloadVersion !== targetVersion) return false;
+        renderSmallChartsOnlyValue();
+        setAnalyticsCardLoading("analyticsValueLoading", false);
+        return true;
+      },
+      () => {
+        if (!state.payload || state.payloadVersion !== targetVersion) return false;
+        renderSmallChartsOnlyDuration();
+        setAnalyticsCardLoading("analyticsDurationLoading", false);
+        return true;
+      }
+    ];
+    const runStep = (index) => {
+      if (index >= steps.length) {
+        state.analyticsRenderedVersion = targetVersion;
+        state.analyticsRenderInProgressVersion = -1;
+        setTabLoading("analytics", false);
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        const ok = steps[index]();
+        if (!ok) {
+          state.analyticsRenderInProgressVersion = -1;
+          setTabLoading("analytics", false);
+          return;
+        }
+        runStep(index + 1);
+      });
+    };
+    runStep(0);
+  }
+
+  function scheduleBackgroundWarmup() {
+    if (!state.payload) return;
+    if (state.backgroundWarmupTimer) {
+      clearTimeout(state.backgroundWarmupTimer);
+      state.backgroundWarmupTimer = null;
+    }
+    const payloadVersion = state.payloadVersion;
+    state.backgroundWarmupTimer = setTimeout(() => {
+      if (!state.payload || state.payloadVersion !== payloadVersion) return;
+      ensureTableRendered();
+      setTimeout(() => {
+        if (!state.payload || state.payloadVersion !== payloadVersion) return;
+        ensureAnalyticsRendered();
+      }, 60);
+    }, 80);
   }
 
   function renderInfo() {
@@ -3170,9 +3643,34 @@
     ["searchQuery", "sourceFilter", "onlyChanges"].forEach((id) => {
       const element = qs(id);
       if (!element) return;
-      element.addEventListener("input", () => { saveUiPrefs(); renderTable(); });
-      element.addEventListener("change", () => { saveUiPrefs(); renderTable(); });
+      element.addEventListener("input", () => { state.tablePage = 1; saveUiPrefs(); ensureTableRendered(); renderTable(); });
+      element.addEventListener("change", () => { state.tablePage = 1; saveUiPrefs(); ensureTableRendered(); renderTable(); });
     });
+    const tablePageSize = qs("tablePageSize");
+    if (tablePageSize) {
+      tablePageSize.addEventListener("change", () => {
+        state.tablePageSize = Number(tablePageSize.value) || 250;
+        state.tablePage = 1;
+        saveUiPrefs();
+        ensureTableRendered();
+        renderTable();
+      });
+    }
+    const tablePrevBtn = qs("tablePrevBtn");
+    if (tablePrevBtn) {
+      tablePrevBtn.addEventListener("click", () => {
+        if (state.tablePage <= 1) return;
+        state.tablePage -= 1;
+        renderTable();
+      });
+    }
+    const tableNextBtn = qs("tableNextBtn");
+    if (tableNextBtn) {
+      tableNextBtn.addEventListener("click", () => {
+        state.tablePage += 1;
+        renderTable();
+      });
+    }
     qs("chartType").addEventListener("change", () => {
       saveUiPrefs();
       updateChartTypeHelp();
@@ -3185,6 +3683,29 @@
         renderCharts();
       });
     }
+    const chartBucket = qs("chartBucket");
+    if (chartBucket) {
+      chartBucket.addEventListener("change", () => {
+        saveUiPrefs();
+        loadHistory(false);
+      });
+    }
+    document.querySelectorAll('[data-bs-toggle="tab"][data-bs-target]').forEach((tabButton) => {
+      tabButton.addEventListener("shown.bs.tab", () => {
+        const target = tabButton.getAttribute("data-bs-target");
+        if (state.uiPrefs) {
+          state.uiPrefs.activeTab = target || "#history-tab-charts";
+          saveUiPrefs();
+        }
+        if (target === "#history-tab-table") {
+          ensureTableRendered();
+          return;
+        }
+        if (target === "#history-tab-analytics") {
+          ensureAnalyticsRendered();
+        }
+      });
+    });
     bindChartResize();
   }
 
@@ -3192,6 +3713,7 @@
     state.uiPrefs = loadUiPrefs();
     bind();
     restoreUiPrefsToControls();
+    activateTab(state.uiPrefs?.activeTab);
     applySavedIntervalBeforeLoad();
     updateChartTypeHelp();
     const savedHeight = window.localStorage.getItem(CHART_HEIGHT_STORAGE_KEY);
