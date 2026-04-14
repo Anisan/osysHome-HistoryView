@@ -537,6 +537,16 @@
               <input class="form-check-input" type="checkbox" id="onlyChanges">
               <label class="form-check-label" for="onlyChanges">{{ _('Only changes') }}</label>
             </div>
+            <div style="min-width: 210px;">
+              <label class="form-label">{{ _('Transition view') }}</label>
+              <select id="transitionDisplayMode" class="form-select">
+                <option value="arrow">{{ _('Arrow (old -> new)') }}</option>
+                <option value="paren">{{ _('In brackets (new, old)') }}</option>
+                <option value="separate">{{ _('Separate columns') }}</option>
+                <option value="separate_value_first">{{ _('Separate columns (value first)') }}</option>
+                <option value="value_only">{{ _('Value only') }}</option>
+              </select>
+            </div>
             <div class="ms-auto d-flex align-items-end gap-2 flex-wrap justify-content-end">
               <div class="history-pagination-controls">
               <label for="tablePageSize" class="history-muted mb-0">{{ _('Rows') }}</label>
@@ -560,9 +570,10 @@
                 <tr>
                   <th class="history-sortable" data-sort-key="added">{{ _('Changed') }}<span class="sort-indicator"></span></th>
                   <th class="history-sortable" data-sort-key="source">{{ _('Source') }}<span class="sort-indicator"></span></th>
-                  <th class="history-sortable d-none" data-sort-key="transition" id="historyTableColTransition">{{ _('Transition') }}<span class="sort-indicator"></span></th>
-                  <th class="history-sortable d-none" data-sort-key="delta" id="historyTableColDelta">{{ _('Delta') }}<span class="sort-indicator"></span></th>
-                  <th class="history-sortable d-none" data-sort-key="value" id="historyTableColValue">{{ _('Value') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="transition" id="historyTableColTransition">{{ _('Transition') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable d-none" data-sort-key="previous_value" id="historyTableColPrevious">{{ _('Previous value') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="value" id="historyTableColValue">{{ _('Value') }}<span class="sort-indicator"></span></th>
+                  <th class="history-sortable" data-sort-key="delta" id="historyTableColDelta">{{ _('Delta') }}<span class="sort-indicator"></span></th>
                   <th class="history-sortable" data-sort-key="duration">{{ _('State duration') }}<span class="sort-indicator"></span></th>
                   <th class="history-sortable" data-sort-key="current_for">{{ _('Current for') }}<span class="sort-indicator"></span></th>
                   <th></th>
@@ -793,6 +804,7 @@
       searchQuery: "",
       sourceFilter: "",
       onlyChanges: false,
+      transitionDisplayMode: "arrow",
       tablePageSize: 250,
       tableSortKey: "added",
       tableSortDir: "desc"
@@ -816,6 +828,9 @@
         searchQuery: typeof parsed.searchQuery === "string" ? parsed.searchQuery : fallback.searchQuery,
         sourceFilter: typeof parsed.sourceFilter === "string" ? parsed.sourceFilter : fallback.sourceFilter,
         onlyChanges: Boolean(parsed.onlyChanges),
+        transitionDisplayMode: ["arrow", "paren", "separate", "separate_value_first", "value_only"].includes(String(parsed.transitionDisplayMode))
+          ? String(parsed.transitionDisplayMode)
+          : fallback.transitionDisplayMode,
         tablePageSize: [100, 250, 500, 1000].includes(Number(parsed.tablePageSize)) ? Number(parsed.tablePageSize) : fallback.tablePageSize,
         tableSortKey: typeof parsed.tableSortKey === "string" ? parsed.tableSortKey : fallback.tableSortKey,
         tableSortDir: parsed.tableSortDir === "asc" ? "asc" : fallback.tableSortDir
@@ -834,7 +849,9 @@
     const searchQuery = qs("searchQuery");
     const sourceFilter = qs("sourceFilter");
     const onlyChanges = qs("onlyChanges");
+    const transitionDisplayMode = qs("transitionDisplayMode");
     const tablePageSize = qs("tablePageSize");
+    const activeTabTarget = getCurrentActiveTabTarget();
     state.uiPrefs = {
       chartType: chartType ? chartType.value : state.uiPrefs?.chartType || "line",
       chartPalette: chartPalette ? chartPalette.value : state.uiPrefs?.chartPalette || "classic",
@@ -842,10 +859,11 @@
       dtBegin: dtBegin ? dtBegin.value : state.uiPrefs?.dtBegin || "",
       dtEnd: dtEnd ? dtEnd.value : state.uiPrefs?.dtEnd || "",
       activeRange: state.activeRange == null ? null : String(state.activeRange),
-      activeTab: state.uiPrefs?.activeTab || "#history-tab-charts",
+      activeTab: activeTabTarget || state.uiPrefs?.activeTab || "#history-tab-charts",
       searchQuery: searchQuery ? searchQuery.value : state.uiPrefs?.searchQuery || "",
       sourceFilter: sourceFilter ? sourceFilter.value : state.uiPrefs?.sourceFilter || "",
       onlyChanges: onlyChanges ? onlyChanges.checked : Boolean(state.uiPrefs?.onlyChanges),
+      transitionDisplayMode: transitionDisplayMode ? transitionDisplayMode.value : (state.uiPrefs?.transitionDisplayMode || "arrow"),
       tablePageSize: tablePageSize ? Number(tablePageSize.value) || 250 : (state.uiPrefs?.tablePageSize || 250),
       tableSortKey: state.tableSort?.key || "added",
       tableSortDir: state.tableSort?.dir === "asc" ? "asc" : "desc"
@@ -864,6 +882,7 @@
     const searchQuery = qs("searchQuery");
     const sourceFilter = qs("sourceFilter");
     const onlyChanges = qs("onlyChanges");
+    const transitionDisplayMode = qs("transitionDisplayMode");
     const tablePageSize = qs("tablePageSize");
     if (chartType) {
       const hasOption = Array.from(chartType.options).some((option) => option.value === state.uiPrefs.chartType);
@@ -882,6 +901,11 @@
     if (searchQuery) searchQuery.value = state.uiPrefs.searchQuery || "";
     if (sourceFilter) sourceFilter.dataset.prefValue = state.uiPrefs.sourceFilter || "";
     if (onlyChanges) onlyChanges.checked = Boolean(state.uiPrefs.onlyChanges);
+    if (transitionDisplayMode) {
+      const allowedModes = ["arrow", "paren", "separate", "separate_value_first", "value_only"];
+      const mode = allowedModes.includes(state.uiPrefs.transitionDisplayMode) ? state.uiPrefs.transitionDisplayMode : "arrow";
+      transitionDisplayMode.value = mode;
+    }
     if (tablePageSize) {
       const allowed = ["100", "250", "500", "1000"];
       const candidate = String(state.uiPrefs.tablePageSize || 250);
@@ -898,12 +922,23 @@
     updateTableSortHeaders();
   }
 
+  function getCurrentActiveTabTarget() {
+    const activeTabButton = document.querySelector('.nav-link[data-bs-toggle="tab"].active[data-bs-target]');
+    const target = activeTabButton?.getAttribute("data-bs-target");
+    return target || null;
+  }
+
   function activateTab(tabTarget) {
     const fallback = "#history-tab-charts";
     const target = typeof tabTarget === "string" && tabTarget ? tabTarget : fallback;
     const tabButton = document.querySelector(`[data-bs-toggle="tab"][data-bs-target="${target}"]`);
-    if (!tabButton || typeof bootstrap === "undefined" || !bootstrap.Tab) return false;
-    bootstrap.Tab.getOrCreateInstance(tabButton).show();
+    if (!tabButton) return false;
+    if (typeof bootstrap !== "undefined" && bootstrap.Tab) {
+      bootstrap.Tab.getOrCreateInstance(tabButton).show();
+      return true;
+    }
+    // Fallback for pages where Bootstrap global API isn't exposed.
+    tabButton.click();
     return true;
   }
 
@@ -1389,6 +1424,7 @@
     if (key === "added") return Number(item.timestamp || new Date(item.added || 0).getTime() || 0);
     if (key === "source") return String(item.source || historyText.unknown).toLowerCase();
     if (key === "transition") return String(item.transition || item.display_value || "").toLowerCase();
+    if (key === "previous_value") return String(item.previous_display_value || item.previous_value || "").toLowerCase();
     if (key === "value") return String(item.display_value || item.value || "").toLowerCase();
     if (key === "delta") {
       if (item.delta_numeric != null && Number.isFinite(Number(item.delta_numeric))) return Number(item.delta_numeric);
@@ -1502,16 +1538,42 @@
   function renderTable() {
     const body = qs("historyTableBody");
     if (!body) return;
-    const mode = getEffectiveMode();
-    const isNumericLike = mode === "numeric" || mode === "boolean";
+    const transitionMode = qs("transitionDisplayMode")?.value || state.uiPrefs?.transitionDisplayMode || "arrow";
     const colTransition = qs("historyTableColTransition");
+    const colPrevious = qs("historyTableColPrevious");
     const colDelta = qs("historyTableColDelta");
     const colValue = qs("historyTableColValue");
-    if (colTransition) colTransition.classList.toggle("d-none", !isNumericLike);
-    if (colDelta) colDelta.classList.toggle("d-none", !isNumericLike);
-    if (colValue) colValue.classList.toggle("d-none", isNumericLike);
-    if (!isNumericLike && (state.tableSort?.key === "transition" || state.tableSort?.key === "delta")) {
-      state.tableSort = { key: "value", dir: state.tableSort?.dir === "asc" ? "asc" : "desc" };
+    const isSeparate = transitionMode === "separate";
+    const isSeparateValueFirst = transitionMode === "separate_value_first";
+    const isValueOnly = transitionMode === "value_only";
+    const isParen = transitionMode === "paren";
+    const showTransition = !isSeparate && !isValueOnly;
+    const showPrevious = isSeparate || isSeparateValueFirst;
+    const showValue = isSeparate || isSeparateValueFirst || isValueOnly;
+    const valueFirst = isSeparateValueFirst;
+    if (colPrevious && colValue) {
+      if (valueFirst) {
+        colPrevious.dataset.sortKey = "value";
+        colPrevious.dataset.sortLabel = "{{ _('Value') }}";
+        colPrevious.innerHTML = `{{ _('Value') }}<span class="sort-indicator"></span>`;
+        colValue.dataset.sortKey = "previous_value";
+        colValue.dataset.sortLabel = "{{ _('Previous value') }}";
+        colValue.innerHTML = `{{ _('Previous value') }}<span class="sort-indicator"></span>`;
+      } else {
+        colPrevious.dataset.sortKey = "previous_value";
+        colPrevious.dataset.sortLabel = "{{ _('Previous value') }}";
+        colPrevious.innerHTML = `{{ _('Previous value') }}<span class="sort-indicator"></span>`;
+        colValue.dataset.sortKey = "value";
+        colValue.dataset.sortLabel = "{{ _('Value') }}";
+        colValue.innerHTML = `{{ _('Value') }}<span class="sort-indicator"></span>`;
+      }
+    }
+    if (colTransition) colTransition.classList.toggle("d-none", !showTransition);
+    if (colPrevious) colPrevious.classList.toggle("d-none", !showPrevious);
+    if (colValue) colValue.classList.toggle("d-none", !showValue);
+    if ((state.tableSort?.key === "transition" && !showTransition) || (state.tableSort?.key === "previous_value" && !showPrevious) || (state.tableSort?.key === "value" && !showValue)) {
+      const fallbackSortKey = showTransition ? "transition" : (showPrevious ? "previous_value" : (showValue ? "value" : "added"));
+      state.tableSort = { key: fallbackSortKey, dir: state.tableSort?.dir === "asc" ? "asc" : "desc" };
       saveUiPrefs();
     }
     updateTableSortHeaders();
@@ -1527,17 +1589,25 @@
       <tr>
         <td>${formatDate(item.added)}</td>
         <td><span class="badge text-bg-secondary">${item.source || historyText.unknown}</span></td>
-        ${isNumericLike
-          ? `<td class="history-transition">${item.transition || item.display_value}</td><td>${item.delta_display || "-"}</td>`
-          : `<td>${item.display_value || item.value || "-"}</td>`
+        ${showTransition
+          ? `<td class="history-transition">${isParen ? `${item.display_value || item.value || "-"} (${item.previous_display_value || item.previous_value || "-"})` : (item.transition || `${item.previous_display_value || item.previous_value || "-"} -> ${item.display_value || item.value || "-"}`)}</td>`
+          : ""
         }
+        ${(showPrevious || showValue)
+          ? (valueFirst
+            ? `${showValue ? `<td>${item.display_value || item.value || "-"}</td>` : ""}${showPrevious ? `<td>${item.previous_display_value || item.previous_value || "-"}</td>` : ""}`
+            : `${showPrevious ? `<td>${item.previous_display_value || item.previous_value || "-"}</td>` : ""}${showValue ? `<td>${item.display_value || item.value || "-"}</td>` : ""}`
+          )
+          : ""
+        }
+        <td>${item.delta_display || "-"}</td>
         <td>${item.duration_label || "-"}</td>
         <td>${item.changed_for_label || "-"}</td>
         <td>
           ${item.id ? `<a href="?op=delete&id=${item.id}&object={{object.id}}&name={{name}}" onclick="return confirm('{{ _('Are you sure?') }}')" class="btn btn-sm btn-danger">{{ _('Delete') }}</a>` : ""}
         </td>
       </tr>
-    `).join("") || `<tr><td colspan="${isNumericLike ? 7 : 6}" class="text-center text-muted">{{ _('No data available') }}</td></tr>`;
+    `).join("") || `<tr><td colspan="${6 + (showTransition ? 1 : 0) + (showPrevious ? 1 : 0) + (showValue ? 1 : 0)}" class="text-center text-muted">{{ _('No data available') }}</td></tr>`;
     const pageInfo = qs("tablePageInfo");
     const prevBtn = qs("tablePrevBtn");
     const nextBtn = qs("tableNextBtn");
@@ -3646,6 +3716,15 @@
       element.addEventListener("input", () => { state.tablePage = 1; saveUiPrefs(); ensureTableRendered(); renderTable(); });
       element.addEventListener("change", () => { state.tablePage = 1; saveUiPrefs(); ensureTableRendered(); renderTable(); });
     });
+    const transitionDisplayMode = qs("transitionDisplayMode");
+    if (transitionDisplayMode) {
+      transitionDisplayMode.addEventListener("change", () => {
+        state.tablePage = 1;
+        saveUiPrefs();
+        ensureTableRendered();
+        renderTable();
+      });
+    }
     const tablePageSize = qs("tablePageSize");
     if (tablePageSize) {
       tablePageSize.addEventListener("change", () => {
