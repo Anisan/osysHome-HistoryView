@@ -137,9 +137,34 @@
     gap: 0.75rem;
     align-items: start;
   }
+  .history-facts pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
   .history-facts strong {
     color: var(--bs-secondary-color);
     font-weight: 600;
+  }
+  .history-param-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .history-param-icon-preview {
+    min-width: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .history-param-color-preview {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 0.25rem;
+    border: 1px solid var(--bs-border-color);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04);
+    display: inline-block;
   }
   .history-loading {
     display: none;
@@ -589,10 +614,11 @@
           <div class="history-grid-2">
             <div class="history-panel">
               <h6>{{ _('Property') }}</h6>
-              <div class="history-facts">
+              <div class="history-facts" id="infoPropertyFacts">
                 <div><strong>{{ _('Name') }}</strong><span id="infoName"></span></div>
                 <div><strong>{{ _('Description') }}</strong><span id="tabInfoDescription"></span></div>
                 <div><strong>{{ _('Type') }}</strong><span id="infoType"></span></div>
+                <div><strong>{{ _('Method') }}</strong><span id="infoMethod"></span></div>
                 <div><strong>{{ _('History') }}</strong><span id="infoHistory"></span></div>
               </div>
             </div>
@@ -638,7 +664,9 @@
     tableSort: {
       key: "added",
       dir: "desc"
-    }
+    },
+    /** Persisted tab target; DOM .active can lag behind bootstrap.Tab.show(), so prefs must not rely on it alone. */
+    activeTabTarget: null
   };
   const UI_PREFS_STORAGE_PREFIX = "historyView.uiPrefs";
   const chartI18n = {
@@ -851,7 +879,7 @@
     const onlyChanges = qs("onlyChanges");
     const transitionDisplayMode = qs("transitionDisplayMode");
     const tablePageSize = qs("tablePageSize");
-    const activeTabTarget = getCurrentActiveTabTarget();
+    const activeTabTarget = state.activeTabTarget || getCurrentActiveTabTarget();
     state.uiPrefs = {
       chartType: chartType ? chartType.value : state.uiPrefs?.chartType || "line",
       chartPalette: chartPalette ? chartPalette.value : state.uiPrefs?.chartPalette || "classic",
@@ -922,8 +950,32 @@
     updateTableSortHeaders();
   }
 
+  function getHistoryViewRoot() {
+    return document.getElementById("history_view_page");
+  }
+
+  /** Bootstrap bundle loads after this inline script (see layouts); toggle tab UI without waiting. */
+  function applyHistoryTabDomState(target) {
+    const root = getHistoryViewRoot();
+    if (!root) return;
+    root.querySelectorAll('[data-bs-toggle="tab"][data-bs-target]').forEach((btn) => {
+      const sel = btn.getAttribute("data-bs-target");
+      const on = sel === target;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    root.querySelectorAll(".tab-content > .tab-pane").forEach((pane) => {
+      const sel = `#${pane.id}`;
+      const on = sel === target;
+      pane.classList.toggle("show", on);
+      pane.classList.toggle("active", on);
+    });
+  }
+
   function getCurrentActiveTabTarget() {
-    const activeTabButton = document.querySelector('.nav-link[data-bs-toggle="tab"].active[data-bs-target]');
+    const root = getHistoryViewRoot();
+    const scope = root || document;
+    const activeTabButton = scope.querySelector('.nav-link[data-bs-toggle="tab"].active[data-bs-target]');
     const target = activeTabButton?.getAttribute("data-bs-target");
     return target || null;
   }
@@ -931,15 +983,32 @@
   function activateTab(tabTarget) {
     const fallback = "#history-tab-charts";
     const target = typeof tabTarget === "string" && tabTarget ? tabTarget : fallback;
-    const tabButton = document.querySelector(`[data-bs-toggle="tab"][data-bs-target="${target}"]`);
+    state.activeTabTarget = target;
+    const root = getHistoryViewRoot();
+    const scope = root || document;
+    const tabButton = scope.querySelector(`[data-bs-toggle="tab"][data-bs-target="${target}"]`);
     if (!tabButton) return false;
     if (typeof bootstrap !== "undefined" && bootstrap.Tab) {
       bootstrap.Tab.getOrCreateInstance(tabButton).show();
       return true;
     }
-    // Fallback for pages where Bootstrap global API isn't exposed.
-    tabButton.click();
+    applyHistoryTabDomState(target);
     return true;
+  }
+
+  /** After bootstrap.bundle loads, align Tab API with saved tab (DOM was set earlier without Bootstrap). */
+  function syncHistoryBootstrapTabFromState() {
+    if (typeof bootstrap === "undefined" || !bootstrap.Tab) return;
+    const target = state.activeTabTarget || getCurrentActiveTabTarget();
+    if (!target) return;
+    const root = getHistoryViewRoot();
+    const btn = (root || document).querySelector(`[data-bs-toggle="tab"][data-bs-target="${target}"]`);
+    if (!btn) return;
+    try {
+      bootstrap.Tab.getOrCreateInstance(btn).show();
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   function toLocalInputValue(date) {
@@ -1208,6 +1277,171 @@
     }
   }
 
+  function parsePropertyParams(value) {
+    if (value == null || value === "") return null;
+    if (typeof value === "object") return value;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      return raw;
+    }
+  }
+
+  function formatParamValue(value) {
+    if (value == null || value === "") return "-";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (error) {
+      return String(value);
+    }
+  }
+
+  function clearPropertyParamRows() {
+    const facts = qs("infoPropertyFacts");
+    if (!facts) return null;
+    facts.querySelectorAll("[data-param-row='1']").forEach((row) => row.remove());
+    return facts;
+  }
+
+  function createIconPreview(iconValue) {
+    const raw = String(iconValue || "").trim();
+    if (!raw) return null;
+    const wrapper = document.createElement("span");
+    wrapper.className = "history-param-icon-preview";
+    if (raw.includes(":") && !raw.includes(" ")) {
+      const iconify = document.createElement("iconify-icon");
+      iconify.setAttribute("icon", raw);
+      wrapper.appendChild(iconify);
+      return wrapper;
+    }
+    const icon = document.createElement("i");
+    icon.className = raw;
+    wrapper.appendChild(icon);
+    return wrapper;
+  }
+
+  function createColorPreview(colorValue) {
+    const raw = String(colorValue || "").trim();
+    if (!raw) return null;
+    const isHex = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(raw);
+    const isRgb = /^rgba?\(/i.test(raw);
+    const isHsl = /^hsla?\(/i.test(raw);
+    if (!isHex && !isRgb && !isHsl) return null;
+    const swatch = document.createElement("span");
+    swatch.className = "history-param-color-preview";
+    swatch.style.backgroundColor = raw;
+    swatch.title = raw;
+    swatch.setAttribute("aria-label", raw);
+    return swatch;
+  }
+
+  function appendParamRow(host, key, label, value) {
+    const row = document.createElement("div");
+    row.dataset.paramRow = "1";
+    const name = document.createElement("strong");
+    name.textContent = label;
+    const valueEl = document.createElement("span");
+    if (key === "icon") {
+      valueEl.className = "history-param-value";
+      const preview = createIconPreview(value);
+      if (preview) valueEl.appendChild(preview);
+      const text = document.createElement("code");
+      text.textContent = formatParamValue(value);
+      valueEl.appendChild(text);
+    } else if (key === "color") {
+      valueEl.className = "history-param-value";
+      const preview = createColorPreview(value);
+      if (preview) valueEl.appendChild(preview);
+      const text = document.createElement("code");
+      text.textContent = formatParamValue(value);
+      valueEl.appendChild(text);
+    } else {
+      const formatted = formatParamValue(value);
+      if (typeof value === "object" && value != null) {
+        const pre = document.createElement("pre");
+        pre.textContent = formatted;
+        valueEl.appendChild(pre);
+      } else {
+        valueEl.textContent = formatted;
+      }
+    }
+    row.appendChild(name);
+    row.appendChild(valueEl);
+    host.appendChild(row);
+  }
+
+  function renderPropertyParams(paramsValue) {
+    const target = clearPropertyParamRows();
+    if (!target) return;
+    const parsed = parsePropertyParams(paramsValue);
+    if (!parsed) {
+      return;
+    }
+    if (typeof parsed === "string") {
+      appendParamRow(target, "params", {{ _('Parameters')|tojson }}, parsed);
+      return;
+    }
+    if (typeof parsed !== "object" || Array.isArray(parsed)) {
+      appendParamRow(target, "params", {{ _('Parameters')|tojson }}, parsed);
+      return;
+    }
+
+    const labelMap = {
+      icon: {{ _('Icon')|tojson }},
+      color: {{ _('Color')|tojson }},
+      sort_order: {{ _('Sort Order')|tojson }},
+      default_value: {{ _('Default Value')|tojson }},
+      read_only: {{ _('Read Only')|tojson }},
+      min: {{ _('Minimum Value')|tojson }},
+      max: {{ _('Maximum Value')|tojson }},
+      decimals: {{ _('Decimals')|tojson }},
+      step: {{ _('Step (Discreteness)')|tojson }},
+      regexp: {{ _('RegExp Pattern')|tojson }},
+      enum_values: {{ _('Enum Values')|tojson }},
+      allowed_values: {{ _('Allowed Values')|tojson }},
+      rate_limit: {{ _('Rate Limit (seconds)')|tojson }},
+      depends_on: {{ _('Dependencies (depends_on)')|tojson }}
+    };
+    const orderedKeys = [
+      "icon",
+      "color",
+      "sort_order",
+      "default_value",
+      "read_only",
+      "min",
+      "max",
+      "decimals",
+      "step",
+      "regexp",
+      "enum_values",
+      "allowed_values",
+      "rate_limit",
+      "depends_on"
+    ];
+
+    let rendered = false;
+
+    orderedKeys.forEach((key) => {
+      if (!Object.prototype.hasOwnProperty.call(parsed, key)) return;
+      appendParamRow(target, key, labelMap[key] || key, parsed[key]);
+      rendered = true;
+    });
+
+    Object.keys(parsed).forEach((key) => {
+      if (orderedKeys.includes(key)) return;
+      appendParamRow(target, key, key, parsed[key]);
+      rendered = true;
+    });
+
+    if (!rendered) {
+      return;
+    }
+  }
+
   async function loadInfo() {
     const response = await fetch(`/api/property/info/${encodeURIComponent(state.objectName + "." + state.propertyName)}`);
     const data = await response.json();
@@ -1217,7 +1451,9 @@
       qs("infoName").textContent = data.result.name || "";
       qs("tabInfoDescription").textContent = data.result.description || "-";
       qs("infoType").textContent = data.result.type || "-";
+      qs("infoMethod").textContent = data.result.method_name || data.result.method || data.result.method_id || "-";
       qs("infoHistory").textContent = data.result.history || "0";
+      renderPropertyParams(data.result.params);
     }
   }
 
@@ -1225,12 +1461,11 @@
     renderSummary();
     renderCharts();
     renderInfo();
-    const tableTab = document.querySelector('[data-bs-target="#history-tab-table"]');
-    if (tableTab?.classList.contains("active")) {
+    const tabTarget = state.activeTabTarget || getCurrentActiveTabTarget() || "#history-tab-charts";
+    if (tabTarget === "#history-tab-table") {
       ensureTableRendered();
     }
-    const analyticsTab = document.querySelector('[data-bs-target="#history-tab-analytics"]');
-    if (analyticsTab?.classList.contains("active")) {
+    if (tabTarget === "#history-tab-analytics") {
       ensureAnalyticsRendered();
     }
     scheduleBackgroundWarmup();
@@ -1409,10 +1644,9 @@
       chartUnavailableNote.classList.toggle("d-none", supported);
       chartUnavailableNote.textContent = historyText.chartUnavailable;
     }
-    if (analyticsContent) analyticsContent.classList.toggle("d-none", !supported);
+    if (analyticsContent) analyticsContent.classList.remove("d-none");
     if (analyticsUnavailableNote) {
-      analyticsUnavailableNote.classList.toggle("d-none", supported);
-      analyticsUnavailableNote.textContent = historyText.analyticsUnavailable;
+      analyticsUnavailableNote.classList.add("d-none");
     }
     if (!supported && caption) {
       caption.textContent = historyText.chartUnavailable;
@@ -1547,7 +1781,7 @@
     const isSeparateValueFirst = transitionMode === "separate_value_first";
     const isValueOnly = transitionMode === "value_only";
     const isParen = transitionMode === "paren";
-    const showTransition = !isSeparate && !isValueOnly;
+    const showTransition = !isSeparate && !isSeparateValueFirst && !isValueOnly;
     const showPrevious = isSeparate || isSeparateValueFirst;
     const showValue = isSeparate || isSeparateValueFirst || isValueOnly;
     const valueFirst = isSeparateValueFirst;
@@ -3127,7 +3361,6 @@
   }
 
   function renderSmallCharts() {
-    if (!isChartSupportedMode()) return;
     const seriesData = state.payload.series || {};
     const limitedSource = limitCategorySeries(seriesData.source_pie || [], 14);
     const limitedValue = limitCategorySeries(seriesData.value_pie || [], 14);
@@ -3183,7 +3416,6 @@
   }
 
   function renderSmallChartsOnlySource() {
-    if (!isChartSupportedMode()) return;
     const seriesData = state.payload.series || {};
     const limitedSource = limitCategorySeries(seriesData.source_pie || [], 14);
     Highcharts.chart("sourceChart", {
@@ -3195,7 +3427,6 @@
   }
 
   function renderSmallChartsOnlyValue() {
-    if (!isChartSupportedMode()) return;
     const seriesData = state.payload.series || {};
     const limitedValue = limitCategorySeries(seriesData.value_pie || [], 14);
     Highcharts.chart("valueChart", {
@@ -3207,7 +3438,6 @@
   }
 
   function renderSmallChartsOnlyDuration() {
-    if (!isChartSupportedMode()) return;
     const seriesData = state.payload.series || {};
     const limitedDuration = limitCategorySeries(seriesData.duration_column || [], 20);
     Highcharts.chart("durationChart", {
@@ -3392,7 +3622,6 @@
   }
 
   function renderAnalytics() {
-    if (!isChartSupportedMode()) return;
     const fallbackAnalytics = buildAnalyticsFallback();
     const serverAnalytics = state.payload.analytics || {};
     const analytics = {
@@ -3505,7 +3734,7 @@
       profileYAxis = { title: { text: historyText.profileActiveAxis } };
       if (profileTitle) profileTitle.textContent = historyText.profileActiveTitle;
       if (profileCaption) profileCaption.textContent = historyText.profileActiveCaption;
-    } else if (analytics.daily_profile) {
+    } else if (analytics.daily_profile && analytics.daily_profile.some((item) => item[1] != null)) {
       profileSeries = [{
         name: historyText.profileAverageSeries,
         data: analytics.daily_profile.map((item) => item[1])
@@ -3515,13 +3744,20 @@
       if (profileTitle) profileTitle.textContent = historyText.profileAverageTitle;
       if (profileCaption) profileCaption.textContent = historyText.profileAverageCaption;
     }
+    if (!profileSeries.length) {
+      if (profileTitle) profileTitle.textContent = historyText.profileAverageTitle;
+      if (profileCaption) profileCaption.textContent = "";
+    }
     if (profileTarget) {
+      const profileSeriesFinal = profileSeries.length
+        ? profileSeries
+        : [{ name: "\u2014", data: [] }];
       Highcharts.chart("analyticsProfileChart", {
-        chart: { type: profileType },
+        chart: { type: profileSeries.length ? profileType : "line" },
         title: { text: null },
         xAxis: { categories: profileCategories },
         yAxis: profileYAxis || { title: { text: null } },
-        series: profileSeries,
+        series: profileSeriesFinal,
         credits: { enabled: false }
       });
     }
@@ -3774,6 +4010,7 @@
         const target = tabButton.getAttribute("data-bs-target");
         if (state.uiPrefs) {
           state.uiPrefs.activeTab = target || "#history-tab-charts";
+          state.activeTabTarget = state.uiPrefs.activeTab;
           saveUiPrefs();
         }
         if (target === "#history-tab-table") {
@@ -3790,6 +4027,7 @@
 
   async function start() {
     state.uiPrefs = loadUiPrefs();
+    state.activeTabTarget = state.uiPrefs?.activeTab || "#history-tab-charts";
     bind();
     restoreUiPrefsToControls();
     activateTab(state.uiPrefs?.activeTab);
@@ -3814,6 +4052,7 @@
     }
     await loadInfo();
     await loadHistory();
+    syncHistoryBootstrapTabFromState();
   }
 
   start();
