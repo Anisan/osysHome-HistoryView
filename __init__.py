@@ -102,8 +102,11 @@ class HistoryView(BasePlugin):
             return None
         try:
             text = str(value).strip()
-            if text.lower() in {"true", "false"}:
-                return 1.0 if text.lower() == "true" else 0.0
+            lowered = text.lower()
+            if lowered in {"true", "on", "yes"}:
+                return 1.0
+            if lowered in {"false", "off", "no"}:
+                return 0.0
             parsed = float(text)
             if math.isfinite(parsed):
                 return parsed
@@ -224,16 +227,126 @@ class HistoryView(BasePlugin):
         }
         return mapping.get(bucket, None)
 
-    def _build_numeric_series(self, entries, dt_begin, dt_end, bucket):
+    def _is_binary_signal(self, timeline_entries):
+        values = {entry.get("numeric_value") for entry in timeline_entries if entry.get("numeric_value") is not None}
+        if not values:
+            return False
+        return values.issubset({0, 1, 0.0, 1.0})
+
+    def _is_counter_like(self, numeric_entries, numeric_points):
+        if len(numeric_points) < 3 or len(numeric_entries) < 2:
+            return False
+        for entry in numeric_entries:
+            delta = entry.get("delta_numeric")
+            if delta is not None and delta < 0:
+                return False
+        if numeric_points[-1]["numeric_value"] < numeric_points[0]["numeric_value"]:
+            return False
+        positive_deltas = [
+            entry["delta_numeric"]
+            for entry in numeric_entries
+            if entry.get("delta_numeric") is not None and entry["delta_numeric"] > 0
+        ]
+        return bool(positive_deltas)
+
+    def _binary_profile_has_data(self, binary_stats):
+        if not binary_stats:
+            return False
+        profile = binary_stats.get("active_profile") or []
+        if any((item[1] or 0) > 0 for item in profile):
+            return True
+        return (binary_stats.get("active_seconds") or 0) > 0
+
+    def _chart_hints(self, obj, prop, property_name, entries, mode, timeline_entries):
+        hints = {
+            "empty_reason": None,
+            "message_key": None,
+            "suggested_chart_type": None,
+            "suggested_chart_palette": None,
+            "alternatives": [],
+        }
+        if not entries:
+            hints["empty_reason"] = "no_records"
+            hints["message_key"] = "chart_empty_no_records"
+        elif len(entries) == 1:
+            hints["empty_reason"] = "sparse"
+            hints["message_key"] = "chart_empty_sparse"
+        elif mode in ("numeric", "boolean"):
+            numeric_count = sum(1 for entry in entries if entry.get("numeric_value") is not None)
+            if numeric_count <= 1:
+                hints["empty_reason"] = "sparse"
+                hints["message_key"] = "chart_empty_sparse"
+
+        alternative_map = {
+            "value": ["valuesHour", "valuesDay"],
+            "voltage": ["power"],
+            "current": ["power"],
+        }
+        for alt_name in alternative_map.get(property_name, []):
+            alt_prop = obj.properties.get(alt_name)
+            if not alt_prop or alt_name == property_name or (alt_prop.history or 0) == 0:
+                continue
+            hints["alternatives"].append(
+                {
+                    "property": alt_name,
+                    "label": alt_prop.description or alt_name,
+                    "history": alt_prop.history,
+                }
+            )
+
+        if mode == "state":
+            hints["suggested_chart_type"] = "step"
+        elif mode == "boolean" or self._is_binary_signal(timeline_entries):
+            hints["suggested_chart_type"] = "step"
+        elif self._is_counter_like(
+            [entry for entry in entries if entry.get("numeric_value") is not None and entry.get("delta_numeric") is not None],
+            [entry for entry in entries if entry.get("numeric_value") is not None],
+        ):
+            hints["suggested_chart_type"] = "delta"
+        elif property_name in ("valuesHour", "valuesDay"):
+            hints["suggested_chart_type"] = "column"
+        elif property_name == "power":
+            hints["suggested_chart_type"] = "step"
+            hints["suggested_chart_palette"] = "preset_power"
+        else:
+            hints["suggested_chart_type"] = "line"
+        return hints
+
+    def _prepend_range_start_point(self, numeric_entries, timeline_entries, dt_begin):
+        if not numeric_entries or not dt_begin:
+            return list(numeric_entries)
+        begin_ms = int(dt_begin.timestamp() * 1000)
+        first_ts = numeric_entries[0]["timestamp"]
+        if first_ts <= begin_ms:
+            return list(numeric_entries)
+        synthetic = next(
+            (
+                entry
+                for entry in timeline_entries
+                if entry.get("synthetic") and entry.get("numeric_value") is not None
+            ),
+            None,
+        )
+        if not synthetic:
+            return list(numeric_entries)
+        lead_point = {
+            "timestamp": begin_ms,
+            "numeric_value": synthetic["numeric_value"],
+        }
+        return [lead_point, *numeric_entries]
+
+    def _build_numeric_series(self, entries, timeline_entries, dt_begin, dt_end, bucket):
         numeric_entries = [entry for entry in entries if entry["numeric_value"] is not None]
         if not numeric_entries:
             return {"series": [], "bucket": "raw"}
+
+        numeric_entries = self._prepend_range_start_point(numeric_entries, timeline_entries, dt_begin)
 
         resolved_bucket = self._choose_bucket(bucket, dt_begin, dt_end, len(numeric_entries))
         bucket_seconds = self._bucket_seconds(resolved_bucket)
         if bucket_seconds is None:
             return {
-                "series": [[entry["timestamp"], entry["numeric_value"]] for entry in numeric_entries],
+                "series": [[entry["timestamp"], round(entry["numeric_value"], 4)] for entry in numeric_entries],
                 "bucket": "raw",
             }
 
@@ -501,13 +614,8 @@ class HistoryView(BasePlugin):
                 "direction": "up" if delta_total > 0 else "down" if delta_total < 0 else "flat",
             }
 
-        positive_deltas = [entry["delta_numeric"] for entry in numeric_entries if entry.get("delta_numeric") is not None and entry["delta_numeric"] >= 0]
-        negative_deltas = [entry["delta_numeric"] for entry in numeric_entries if entry.get("delta_numeric") is not None and entry["delta_numeric"] < 0]
-        counter_like = False
-        if numeric_entries:
-            non_negative_share = len(positive_deltas) / len(numeric_entries)
-            delta_total = (numeric_points[-1]["numeric_value"] - numeric_points[0]["numeric_value"]) if len(numeric_points) >= 2 else 0
-            counter_like = non_negative_share >= 0.8 and delta_total >= 0
+        positive_deltas = [entry["delta_numeric"] for entry in numeric_entries if entry.get("delta_numeric") is not None and entry["delta_numeric"] > 0]
+        counter_like = self._is_counter_like(numeric_entries, numeric_points)
 
         increment_profile_buckets = {}
         for entry in numeric_entries:
@@ -534,7 +642,7 @@ class HistoryView(BasePlugin):
             }
 
         binary_stats = None
-        binary_timeline = [entry for entry in timeline_entries if entry.get("numeric_value") in (0.0, 1.0, 0, 1)]
+        binary_timeline = timeline_entries if self._is_binary_signal(timeline_entries) else []
         if binary_timeline:
             active_entries = [entry for entry in binary_timeline if entry.get("numeric_value") in (1.0, 1)]
             active_seconds = round(sum(entry.get("duration_seconds") or 0 for entry in active_entries), 2)
@@ -571,6 +679,14 @@ class HistoryView(BasePlugin):
             "stddev": stddev,
         }
 
+        profile_mode = "empty"
+        if counter_stats:
+            profile_mode = "counter"
+        elif binary_stats and self._binary_profile_has_data(binary_stats):
+            profile_mode = "binary"
+        elif any(item[1] is not None for item in daily_profile):
+            profile_mode = "daily"
+
         return {
             "hourly_activity": [[hour, count] for hour, count in enumerate(hourly_counts)],
             "top_jumps": top_jumps,
@@ -581,6 +697,7 @@ class HistoryView(BasePlugin):
             "trend": trend,
             "counter": counter_stats,
             "binary": binary_stats,
+            "profile_mode": profile_mode,
         }
 
     def _comparison_summary(self, object_name, property_name, dt_begin, dt_end):
@@ -616,8 +733,9 @@ class HistoryView(BasePlugin):
         timeline_rows = self._build_timeline_entries(full_name, rows, dt_begin, dt_end)
         entries, timeline_entries = self._entries_with_context(rows, timeline_rows, dt_end)
         mode = self._determine_mode(prop.type, None, entries)
-        numeric_series = self._build_numeric_series(entries, dt_begin, dt_end, bucket)
+        numeric_series = self._build_numeric_series(entries, timeline_entries, dt_begin, dt_end, bucket)
         state_series = self._build_state_series(timeline_entries)
+        chart_hints = self._chart_hints(obj, prop, property_name, entries, mode, timeline_entries)
         summary, source_counts, value_counts, durations = self._build_summary(entries, timeline_entries, dt_begin, dt_end)
 
         value_distribution = [{"name": name, "count": count} for name, count in value_counts.most_common()]
@@ -670,6 +788,7 @@ class HistoryView(BasePlugin):
                 "durations": duration_distribution,
             },
             "analytics": analytics,
+            "chart_hints": chart_hints,
         }
 
     def _build_widget_context(self, widget_id: str = None):

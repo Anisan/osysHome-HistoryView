@@ -435,6 +435,7 @@
           </div>
           <div id="mainChart" class="history-chart"></div>
           <div id="chartResizeHandle" class="history-chart-resize" role="separator" aria-label="{{ _('Resize chart height') }}" tabindex="0"></div>
+          <div id="chartEmptyNote" class="alert alert-warning history-unavailable d-none mb-0"></div>
           <div id="chartUnavailableNote" class="alert alert-secondary history-unavailable d-none mb-0"></div>
         </div>
 
@@ -477,6 +478,7 @@
                   <span>{{ _('Building chart') }}</span>
                 </div>
                 <div id="analyticsProfileChart" class="history-mini-chart"></div>
+                <div id="analyticsProfileEmpty" class="alert alert-secondary history-unavailable d-none mb-0 mt-2"></div>
               </div>
             </div>
           </div>
@@ -657,6 +659,7 @@
     analyticsRenderedVersion: -1,
     tableRenderInProgressVersion: -1,
     analyticsRenderInProgressVersion: -1,
+    lastSuggestedChartKey: null,
     backgroundWarmupTimer: null,
     tablePage: 1,
     tablePageSize: 250,
@@ -803,6 +806,11 @@
     profileAverageTitle: {{ _('Daily profile')|tojson }},
     profileAverageCaption: {{ _('Average value by hour')|tojson }},
     chartUnavailable: {{ _('Charts are available only for numeric and boolean properties')|tojson }},
+    chartEmptyNoRecords: {{ _('No history records for the selected period')|tojson }},
+    chartEmptySparse: {{ _('Too few data points to build a meaningful chart. Try a wider period or another property.')|tojson }},
+    chartEmptyTryProperty: {{ _('Try property')|tojson }},
+    analyticsProfileEmpty: {{ _('Not enough numeric data for profile chart')|tojson }},
+    analyticsStatsEmpty: {{ _('Numeric statistics require at least one numeric value')|tojson }},
     analyticsUnavailable: {{ _('Analytics charts are unavailable for this property type')|tojson }},
     sortAsc: {{ _('ascending')|tojson }},
     sortDesc: {{ _('descending')|tojson }}
@@ -1459,6 +1467,7 @@
 
   function renderFromPayload() {
     renderSummary();
+    applySuggestedChartType();
     renderCharts();
     renderInfo();
     const tabTarget = state.activeTabTarget || getCurrentActiveTabTarget() || "#history-tab-charts";
@@ -1612,44 +1621,111 @@
 
   function isChartSupportedMode() {
     const mode = getEffectiveMode();
-    return mode === "numeric" || mode === "boolean";
+    return mode === "numeric" || mode === "boolean" || mode === "state";
   }
 
   function getEffectiveMode() {
     if (!state.payload) return null;
-    const rawMode = String(state.payload.mode || "").toLowerCase();
-    if (rawMode === "numeric" || rawMode === "boolean") return rawMode;
-    const propertyType = String(state.payload.property_type || "").toLowerCase();
-    if (propertyType === "bool" || propertyType === "boolean") return "boolean";
-    if (["int", "integer", "float", "double", "decimal", "number", "numeric"].includes(propertyType)) {
-      return "numeric";
+    return String(state.payload.mode || "state").toLowerCase();
+  }
+
+  function hasMainChartData() {
+    if (!state.payload) return false;
+    const mode = getEffectiveMode();
+    const seriesData = state.payload.series || {};
+    if (mode === "state") {
+      return Array.isArray(seriesData.state) && seriesData.state.length > 0;
     }
-    return rawMode || "state";
+    return Array.isArray(seriesData.numeric) && seriesData.numeric.length > 0;
+  }
+
+  function buildChartHintMessage() {
+    const hints = state.payload?.chart_hints || {};
+    const messageKey = hints.message_key;
+    let message = historyText.chartEmptySparse;
+    if (messageKey === "chart_empty_no_records") {
+      message = historyText.chartEmptyNoRecords;
+    } else if (messageKey === "chart_empty_sparse") {
+      message = historyText.chartEmptySparse;
+    }
+    const alternatives = Array.isArray(hints.alternatives) ? hints.alternatives : [];
+    if (!alternatives.length) {
+      return message;
+    }
+    const links = alternatives.map((item) => {
+      const label = item.label || item.property;
+      const href = `HistoryView?object={{ object.id }}&name=${encodeURIComponent(item.property)}`;
+      return `<a href="${href}" class="alert-link">${escapeHtml(label)}</a>`;
+    }).join(", ");
+    return `${message} ${historyText.chartEmptyTryProperty}: ${links}`;
+  }
+
+  function applySuggestedChartType() {
+    const hints = state.payload?.chart_hints || {};
+    const suggested = hints.suggested_chart_type;
+    const suggestedPalette = hints.suggested_chart_palette;
+    if (!suggested && !suggestedPalette) return;
+    const chartType = qs("chartType");
+    const chartPalette = qs("chartPalette");
+    const key = `${state.objectName}.${state.propertyName}`;
+    if (state.lastSuggestedChartKey === key) return;
+    if (suggested && chartType) {
+      const hasOption = Array.from(chartType.options).some((option) => option.value === suggested);
+      if (hasOption) {
+        chartType.value = suggested;
+        if (state.uiPrefs) {
+          state.uiPrefs.chartType = suggested;
+        }
+      }
+    }
+    if (suggestedPalette && chartPalette) {
+      const hasPalette = Array.from(chartPalette.options).some((option) => option.value === suggestedPalette);
+      if (hasPalette) {
+        chartPalette.value = suggestedPalette;
+        if (state.uiPrefs) {
+          state.uiPrefs.chartPalette = suggestedPalette;
+        }
+      }
+    }
+    state.lastSuggestedChartKey = key;
+    saveUiPrefs();
+    updateChartTypeHelp();
   }
 
   function setChartsAvailability() {
     const supported = isChartSupportedMode();
+    const hasData = hasMainChartData();
     const chartControls = qs("chartControls");
     const chartHost = qs("mainChart");
     const chartResizeHandle = qs("chartResizeHandle");
     const chartUnavailableNote = qs("chartUnavailableNote");
+    const chartEmptyNote = qs("chartEmptyNote");
     const analyticsContent = qs("analyticsContent");
     const analyticsUnavailableNote = qs("analyticsUnavailableNote");
     const caption = qs("chartCaption");
 
     if (chartControls) chartControls.classList.toggle("d-none", !supported);
-    if (chartHost) chartHost.classList.toggle("d-none", !supported);
-    if (chartResizeHandle) chartResizeHandle.classList.toggle("d-none", !supported);
+    if (chartHost) chartHost.classList.toggle("d-none", !supported || !hasData);
+    if (chartResizeHandle) chartResizeHandle.classList.toggle("d-none", !supported || !hasData);
     if (chartUnavailableNote) {
-      chartUnavailableNote.classList.toggle("d-none", supported);
-      chartUnavailableNote.textContent = historyText.chartUnavailable;
+      chartUnavailableNote.classList.add("d-none");
+    }
+    if (chartEmptyNote) {
+      chartEmptyNote.classList.toggle("d-none", !supported || hasData);
+      if (supported && !hasData) {
+        chartEmptyNote.innerHTML = buildChartHintMessage();
+      }
     }
     if (analyticsContent) analyticsContent.classList.remove("d-none");
     if (analyticsUnavailableNote) {
       analyticsUnavailableNote.classList.add("d-none");
     }
-    if (!supported && caption) {
-      caption.textContent = historyText.chartUnavailable;
+    if (caption) {
+      if (!supported) {
+        caption.textContent = historyText.chartUnavailable;
+      } else if (!hasData) {
+        caption.textContent = historyText.chartEmptySparse;
+      }
     }
   }
 
@@ -3300,7 +3376,6 @@
   }
 
   function renderChartInto(targetId, compact) {
-    if (!isChartSupportedMode()) return;
     const { chartOptions, caption, useStock } = buildMainChartOptions(targetId, compact);
     if (targetId === "mainChart") qs("chartCaption").textContent = caption;
     if (targetId === "mainChart" && state.mainChart) {
@@ -3460,8 +3535,8 @@
     if (value == null) return null;
     const normalized = String(value).trim().replace(",", ".");
     if (!normalized) return null;
-    if (normalized.toLowerCase() === "true") return 1;
-    if (normalized.toLowerCase() === "false") return 0;
+    if (normalized.toLowerCase() === "true" || normalized.toLowerCase() === "on" || normalized.toLowerCase() === "yes") return 1;
+    if (normalized.toLowerCase() === "false" || normalized.toLowerCase() === "off" || normalized.toLowerCase() === "no") return 0;
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -3476,6 +3551,45 @@
     if (lower === upper) return sorted[lower];
     const weight = position - lower;
     return sorted[lower] + (sorted[upper] - sorted[lower]) * weight;
+  }
+
+  function isBinarySignalEntries(entries) {
+    const values = new Set();
+    (entries || []).forEach((entry) => {
+      const numeric = entry.numeric_value ?? parseNumericClient(entry.value ?? entry.display_value);
+      if (numeric != null) values.add(numeric);
+    });
+    if (!values.size) return false;
+    return [...values].every((value) => value === 0 || value === 1);
+  }
+
+  function isCounterLikeEntries(numericEntries) {
+    if (!numericEntries || numericEntries.length < 3) return false;
+    let hasPositiveDelta = false;
+    for (const entry of numericEntries) {
+      if (entry.delta_numeric == null) continue;
+      if (entry.delta_numeric < 0) return false;
+      if (entry.delta_numeric > 0) hasPositiveDelta = true;
+    }
+    if (!hasPositiveDelta) return false;
+    const first = numericEntries[0].numeric_value;
+    const last = numericEntries[numericEntries.length - 1].numeric_value;
+    return last >= first;
+  }
+
+  function binaryProfileHasData(binaryStats) {
+    if (!binaryStats) return false;
+    const profile = binaryStats.active_profile || [];
+    if (profile.some((item) => (item[1] || 0) > 0)) return true;
+    return (binaryStats.active_seconds || 0) > 0;
+  }
+
+  function resolveAnalyticsProfileMode(analytics) {
+    if (analytics?.profile_mode) return analytics.profile_mode;
+    if (analytics?.counter?.is_counter_like && analytics.counter.increment_profile) return "counter";
+    if (analytics?.binary && binaryProfileHasData(analytics.binary) && analytics.binary.active_profile) return "binary";
+    if (analytics?.daily_profile && analytics.daily_profile.some((item) => item[1] != null)) return "daily";
+    return "empty";
   }
 
   function buildAnalyticsFallback() {
@@ -3539,10 +3653,10 @@
         delta_display: entry.delta_display || (entry.delta_numeric != null ? `${entry.delta_numeric > 0 ? "+" : ""}${entry.delta_numeric}` : ""),
         source: entry.source
       }));
-    const positiveDeltas = numericEntries.filter((entry) => entry.delta_numeric != null && entry.delta_numeric >= 0).map((entry) => entry.delta_numeric);
-    const counterLike = numericEntries.length >= 3
-      && positiveDeltas.length / Math.max(1, numericEntries.filter((entry) => entry.delta_numeric != null).length) >= 0.8
-      && (numericEntries[numericEntries.length - 1].numeric_value - numericEntries[0].numeric_value) >= 0;
+    const positiveDeltas = numericEntries
+      .filter((entry) => entry.delta_numeric != null && entry.delta_numeric > 0)
+      .map((entry) => entry.delta_numeric);
+    const counterLike = isCounterLikeEntries(numericEntries);
     const incrementProfile = Array.from({ length: 24 }, (_, hour) => {
       const value = numericEntries.reduce((sum, entry) => {
         const added = entry.added ? new Date(entry.added) : null;
@@ -3555,7 +3669,7 @@
     });
     const activeEntries = entries.filter((entry) => parseNumericClient(entry.value ?? entry.display_value) === 1);
     const activeDurations = activeEntries.map((entry) => entry.duration_seconds).filter((value) => value != null);
-    const binaryStats = activeEntries.length || activeDurations.length ? {
+    const binaryStats = isBinarySignalEntries(entries) && (activeEntries.length || activeDurations.length) ? {
       active_seconds: Number(activeDurations.reduce((sum, value) => sum + value, 0).toFixed(2)),
       activation_count: activeEntries.filter((entry) => parseNumericClient(entry.previous_value ?? entry.previous_display_value) !== 1).length,
       avg_active_seconds: activeDurations.length ? Number((activeDurations.reduce((sum, value) => sum + value, 0) / activeDurations.length).toFixed(2)) : null,
@@ -3563,7 +3677,7 @@
       active_profile: activeProfile.map((value, hour) => [hour, Number(value.toFixed(2))])
     } : null;
 
-    return {
+    const fallbackAnalytics = {
       hourly_activity: hourlyCounts.map((count, hour) => [hour, count]),
       top_jumps: topJumps,
       stats: {
@@ -3587,6 +3701,8 @@
       } : null,
       binary: binaryStats
     };
+    fallbackAnalytics.profile_mode = resolveAnalyticsProfileMode(fallbackAnalytics);
+    return fallbackAnalytics;
   }
 
   function escapeHtml(value) {
@@ -3644,23 +3760,35 @@
         : fallbackAnalytics.daily_profile,
       trend: serverAnalytics.trend ?? fallbackAnalytics.trend ?? null,
       counter: serverAnalytics.counter ?? fallbackAnalytics.counter ?? null,
-      binary: serverAnalytics.binary ?? fallbackAnalytics.binary ?? null
+      binary: serverAnalytics.binary ?? fallbackAnalytics.binary ?? null,
+      profile_mode: serverAnalytics.profile_mode ?? fallbackAnalytics.profile_mode ?? "empty"
     };
     const stats = analytics.stats || {};
+    const hasNumericStats = [stats.median, stats.p10, stats.p90, stats.stddev].some((value) => value != null && value !== "");
     const statsCards = qs("analyticsStatsCards");
     if (statsCards) {
-      const cards = [
-        [historyText.statsMedian, formatMetric(stats.median), "is-primary", "median"],
-        ["P10", formatMetric(stats.p10), "", "p10"],
-        ["P90", formatMetric(stats.p90), "", "p90"],
-        ["StdDev", formatMetric(stats.stddev), "", "stddev"]
-      ];
-      statsCards.innerHTML = cards.map(([label, value, cls, helpKey]) => `
-        <div class="history-card ${cls}">
-          <div class="history-muted">${renderMetricLabel(label, helpKey)}</div>
-          <div class="metric">${value}</div>
-        </div>
-      `).join("");
+      if (!hasNumericStats) {
+        statsCards.innerHTML = `
+          <div class="history-card">
+            <div class="history-muted">${historyText.statsMedian}</div>
+            <div class="metric">-</div>
+            <div class="history-muted mt-1">${historyText.analyticsStatsEmpty}</div>
+          </div>
+        `;
+      } else {
+        const cards = [
+          [historyText.statsMedian, formatMetric(stats.median), "is-primary", "median"],
+          ["P10", formatMetric(stats.p10), "", "p10"],
+          ["P90", formatMetric(stats.p90), "", "p90"],
+          ["StdDev", formatMetric(stats.stddev), "", "stddev"]
+        ];
+        statsCards.innerHTML = cards.map(([label, value, cls, helpKey]) => `
+          <div class="history-card ${cls}">
+            <div class="history-muted">${renderMetricLabel(label, helpKey)}</div>
+            <div class="metric">${value}</div>
+          </div>
+        `).join("");
+      }
     }
 
     const behaviorCards = qs("analyticsBehaviorCards");
@@ -3712,11 +3840,13 @@
     const profileTitle = qs("analyticsProfileTitle");
     const profileCaption = qs("analyticsProfileCaption");
     const profileTarget = qs("analyticsProfileChart");
+    const profileEmpty = qs("analyticsProfileEmpty");
     let profileSeries = [];
     let profileType = "line";
     let profileCategories = Array.from({ length: 24 }, (_, hour) => `${hour}:00`);
     let profileYAxis = null;
-    if (analytics.counter?.is_counter_like && analytics.counter.increment_profile) {
+    const profileMode = resolveAnalyticsProfileMode(analytics);
+    if (profileMode === "counter" && analytics.counter?.increment_profile) {
       profileSeries = [{
         name: historyText.profileIncrementSeries,
         data: analytics.counter.increment_profile.map((item) => item[1])
@@ -3725,7 +3855,7 @@
       profileYAxis = { title: { text: historyText.profileIncrementAxis } };
       if (profileTitle) profileTitle.textContent = historyText.profileIncrementTitle;
       if (profileCaption) profileCaption.textContent = historyText.profileIncrementCaption;
-    } else if (analytics.binary?.active_profile) {
+    } else if (profileMode === "binary" && analytics.binary?.active_profile) {
       profileSeries = [{
         name: historyText.profileActiveSeries,
         data: analytics.binary.active_profile.map((item) => item[1] / 60)
@@ -3734,7 +3864,7 @@
       profileYAxis = { title: { text: historyText.profileActiveAxis } };
       if (profileTitle) profileTitle.textContent = historyText.profileActiveTitle;
       if (profileCaption) profileCaption.textContent = historyText.profileActiveCaption;
-    } else if (analytics.daily_profile && analytics.daily_profile.some((item) => item[1] != null)) {
+    } else if (profileMode === "daily" && analytics.daily_profile) {
       profileSeries = [{
         name: historyText.profileAverageSeries,
         data: analytics.daily_profile.map((item) => item[1])
@@ -3748,18 +3878,24 @@
       if (profileTitle) profileTitle.textContent = historyText.profileAverageTitle;
       if (profileCaption) profileCaption.textContent = "";
     }
+    if (profileEmpty) {
+      profileEmpty.classList.toggle("d-none", profileSeries.length > 0);
+      if (!profileSeries.length) {
+        profileEmpty.textContent = historyText.analyticsProfileEmpty;
+      }
+    }
     if (profileTarget) {
-      const profileSeriesFinal = profileSeries.length
-        ? profileSeries
-        : [{ name: "\u2014", data: [] }];
-      Highcharts.chart("analyticsProfileChart", {
-        chart: { type: profileSeries.length ? profileType : "line" },
-        title: { text: null },
-        xAxis: { categories: profileCategories },
-        yAxis: profileYAxis || { title: { text: null } },
-        series: profileSeriesFinal,
-        credits: { enabled: false }
-      });
+      profileTarget.classList.toggle("d-none", profileSeries.length === 0);
+      if (profileSeries.length) {
+        Highcharts.chart("analyticsProfileChart", {
+          chart: { type: profileType },
+          title: { text: null },
+          xAxis: { categories: profileCategories },
+          yAxis: profileYAxis || { title: { text: null } },
+          series: profileSeries,
+          credits: { enabled: false }
+        });
+      }
     }
 
     const topJumpsBody = qs("topJumpsTableBody");
@@ -3780,6 +3916,13 @@
   function renderCharts() {
     setChartsAvailability();
     if (!isChartSupportedMode()) {
+      if (state.mainChart) {
+        state.mainChart.destroy();
+        state.mainChart = null;
+      }
+      return;
+    }
+    if (!hasMainChartData()) {
       if (state.mainChart) {
         state.mainChart.destroy();
         state.mainChart = null;
