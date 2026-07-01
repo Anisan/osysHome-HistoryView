@@ -392,6 +392,14 @@
                   <option value="radar24">{{ _('Daily Profile') }}</option>
                 </select>
               </div>
+              <div id="deltaSeriesTypeControl" class="d-none" style="min-width: 180px;">
+                <label class="form-label mb-1">{{ _('Series Type') }}</label>
+                <select id="deltaSeriesType" class="form-select form-select-sm">
+                  <option value="column">{{ _('Column') }}</option>
+                  <option value="line">{{ _('Line') }}</option>
+                  <option value="spline">{{ _('Spline') }}</option>
+                </select>
+              </div>
               <div id="chartPaletteControl" style="min-width: 180px;">
                 <label class="form-label mb-1">{{ _('Palette') }}</label>
                 <select id="chartPalette" class="form-select form-select-sm">
@@ -831,6 +839,7 @@
   function loadUiPrefs() {
     const fallback = {
       chartType: "line",
+      deltaSeriesType: "column",
       chartPalette: "classic",
       chartBucket: "auto",
       dtBegin: "",
@@ -853,8 +862,10 @@
       const paletteCandidate = typeof parsed.chartPalette === "string" && parsed.chartPalette
         ? parsed.chartPalette
         : (typeof parsed.heatmapPalette === "string" && parsed.heatmapPalette ? parsed.heatmapPalette : fallback.chartPalette);
+      const deltaSeriesCandidate = typeof parsed.deltaSeriesType === "string" ? parsed.deltaSeriesType : fallback.deltaSeriesType;
       return {
         chartType: typeof parsed.chartType === "string" && parsed.chartType ? parsed.chartType : fallback.chartType,
+        deltaSeriesType: ["column", "line", "spline"].includes(deltaSeriesCandidate) ? deltaSeriesCandidate : fallback.deltaSeriesType,
         chartPalette: paletteCandidate,
         chartBucket: typeof globalBucket === "string" && globalBucket ? globalBucket : (typeof parsed.chartBucket === "string" && parsed.chartBucket ? parsed.chartBucket : fallback.chartBucket),
         dtBegin: typeof parsed.dtBegin === "string" ? parsed.dtBegin : fallback.dtBegin,
@@ -878,6 +889,7 @@
 
   function saveUiPrefs() {
     const chartType = qs("chartType");
+    const deltaSeriesType = qs("deltaSeriesType");
     const chartPalette = qs("chartPalette");
     const chartBucket = qs("chartBucket");
     const dtBegin = qs("dtBegin");
@@ -890,6 +902,7 @@
     const activeTabTarget = state.activeTabTarget || getCurrentActiveTabTarget();
     state.uiPrefs = {
       chartType: chartType ? chartType.value : state.uiPrefs?.chartType || "line",
+      deltaSeriesType: deltaSeriesType ? deltaSeriesType.value : state.uiPrefs?.deltaSeriesType || "column",
       chartPalette: chartPalette ? chartPalette.value : state.uiPrefs?.chartPalette || "classic",
       chartBucket: chartBucket ? chartBucket.value : state.uiPrefs?.chartBucket || "auto",
       dtBegin: dtBegin ? dtBegin.value : state.uiPrefs?.dtBegin || "",
@@ -911,6 +924,7 @@
   function restoreUiPrefsToControls() {
     if (!state.uiPrefs) return;
     const chartType = qs("chartType");
+    const deltaSeriesType = qs("deltaSeriesType");
     const chartPalette = qs("chartPalette");
     const chartBucket = qs("chartBucket");
     const dtBegin = qs("dtBegin");
@@ -923,6 +937,10 @@
     if (chartType) {
       const hasOption = Array.from(chartType.options).some((option) => option.value === state.uiPrefs.chartType);
       chartType.value = hasOption ? state.uiPrefs.chartType : "line";
+    }
+    if (deltaSeriesType) {
+      const hasDeltaOption = Array.from(deltaSeriesType.options).some((option) => option.value === state.uiPrefs.deltaSeriesType);
+      deltaSeriesType.value = hasDeltaOption ? state.uiPrefs.deltaSeriesType : "column";
     }
     if (chartPalette) {
       const hasOption = Array.from(chartPalette.options).some((option) => option.value === state.uiPrefs.chartPalette);
@@ -1966,6 +1984,51 @@
       result.push([current[0], Number((currentValue - previousValue).toFixed(4))]);
     }
     return result;
+  }
+
+  function prepareDeltaSeriesData(deltaData, seriesType) {
+    if (seriesType === "column") return deltaData || [];
+    return (deltaData || []).filter((point) => {
+      const value = Array.isArray(point) ? Number(point[1]) : NaN;
+      return Number.isFinite(value) && Math.abs(value) > 1e-9;
+    });
+  }
+
+  function getDeltaSeriesType() {
+    const control = qs("deltaSeriesType");
+    const candidate = control ? control.value : (state.uiPrefs?.deltaSeriesType || "column");
+    return ["column", "line", "spline"].includes(candidate) ? candidate : "column";
+  }
+
+  function getDeltaValueZones(c) {
+    return [
+      { value: 0, color: c.danger },
+      { color: c.success }
+    ];
+  }
+
+  function buildDeltaChartSeries(deltaData, seriesType, c) {
+    const displayData = prepareDeltaSeriesData(deltaData, seriesType);
+    const series = {
+      name: historyText.deltaSeries,
+      type: seriesType,
+      data: displayData,
+      zoneAxis: "y",
+      zones: getDeltaValueZones(c),
+      tooltip: { valueDecimals: 4 }
+    };
+    if (seriesType === "line" || seriesType === "spline") {
+      series.lineWidth = 2;
+      series.marker = { enabled: seriesType === "spline", radius: 2 };
+    }
+    return series;
+  }
+
+  function updateDeltaSeriesTypeVisibility() {
+    const chartType = qs("chartType");
+    const control = qs("deltaSeriesTypeControl");
+    if (!control) return;
+    control.classList.toggle("d-none", !chartType || chartType.value !== "delta");
   }
 
   function buildTimelineSeries(entries) {
@@ -3188,25 +3251,22 @@
 
       if (selectedChartType === "delta") {
         const deltaData = buildDeltaSeries(numericData);
+        const deltaSeriesType = getDeltaSeriesType();
         chartOptions = {
           chart: { renderTo: targetId, height: compact ? 320 : state.chartHeight },
           title: { text: state.payload.property_label },
           xAxis: xAxisDatetime,
-          yAxis: { title: { text: historyText.deltaAxis } },
-          plotOptions: {
-            series: {
-              zones: [
-                { value: 0, color: c.danger },
-                { color: c.success }
-              ]
-            }
+          yAxis: {
+            title: { text: historyText.deltaAxis },
+            plotLines: [{
+              value: 0,
+              color: isLightTheme ? "#6c757d" : "#97a2b2",
+              width: 1,
+              dashStyle: "ShortDot",
+              zIndex: 3
+            }]
           },
-          series: [{
-            name: historyText.deltaSeries,
-            type: "column",
-            data: deltaData,
-            tooltip: { valueDecimals: 4 }
-          }],
+          series: [buildDeltaChartSeries(deltaData, deltaSeriesType, c)],
           navigator: { enabled: !compact, series: { color: c.primary, lineColor: c.primary } },
           rangeSelector: { enabled: !compact, inputEnabled: false }
         };
@@ -3367,6 +3427,7 @@
   function updateChartTypeHelp() {
     const chartType = qs("chartType");
     const help = qs("chartTypeHelp");
+    updateDeltaSeriesTypeVisibility();
     if (!chartType || !help) return;
     const descriptions = chartI18n.typeDescriptions;
     const label = chartType.options[chartType.selectedIndex]?.textContent?.trim() || chartType.value;
@@ -4134,6 +4195,13 @@
       updateChartTypeHelp();
       renderCharts();
     });
+    const deltaSeriesType = qs("deltaSeriesType");
+    if (deltaSeriesType) {
+      deltaSeriesType.addEventListener("change", () => {
+        saveUiPrefs();
+        renderCharts();
+      });
+    }
     const chartPalette = qs("chartPalette");
     if (chartPalette) {
       chartPalette.addEventListener("change", () => {

@@ -149,6 +149,8 @@
     if (t === 'radar' || t === 'polar') return 'radar24';
     if (t === 'waterfall delta') return 'waterfall';
     if (t === 'moving average') return 'movingavg';
+    if (t === 'delta line') return 'delta_line';
+    if (t === 'delta spline') return 'delta_spline';
     return t;
   }
 
@@ -159,6 +161,31 @@
 
   function isStockSafeType(type) {
     return ['line', 'column', 'spline', 'area', 'areaspline', 'scatter', 'ohlc'].includes(type);
+  }
+
+  function resolveDeltaRenderType(chartType) {
+    const t = normalizeChartType(chartType);
+    if (t === 'delta_line') return 'line';
+    if (t === 'delta_spline') return 'spline';
+    if (t === 'delta') return 'column';
+    return null;
+  }
+
+  function getDeltaValueZones(c) {
+    return [
+      { value: 0, color: c.danger },
+      { color: c.success }
+    ];
+  }
+
+  function applyDeltaSeriesStyle(series, c) {
+    return {
+      ...series,
+      zoneAxis: 'y',
+      zones: getDeltaValueZones(c),
+      lineWidth: series.type === 'line' || series.type === 'spline' ? 2 : undefined,
+      marker: series.type === 'spline' ? { enabled: true, radius: 2 } : (series.type === 'line' ? { enabled: false, radius: 2 } : undefined)
+    };
   }
 
   function resolveSeriesType(chartType) {
@@ -200,6 +227,14 @@
       result.push([data[i][0], Number((curr - prev).toFixed(4))]);
     }
     return result;
+  }
+
+  function prepareDeltaSeriesData(deltaData, seriesType) {
+    if (seriesType === 'column') return deltaData || [];
+    return (deltaData || []).filter((point) => {
+      const value = Array.isArray(point) ? Number(point[1]) : NaN;
+      return Number.isFinite(value) && Math.abs(value) > 1e-9;
+    });
   }
 
   function getAutoBucketMs(data) {
@@ -320,10 +355,18 @@
       let type = normalizedType.type;
       let step = normalizedType.step;
       let marker = normalizedType.marker;
+      let deltaType = null;
       if (localType === 'movingavg') {
         data = buildMovingAverage(rawData, 10);
         type = 'spline';
-      } else if (localType === 'delta' || localType === 'waterfall') {
+      } else if (resolveDeltaRenderType(localType)) {
+        const deltaRenderType = resolveDeltaRenderType(localType);
+        data = prepareDeltaSeriesData(buildDelta(rawData), deltaRenderType);
+        type = deltaRenderType;
+        deltaType = localType;
+        step = undefined;
+        marker = undefined;
+      } else if (localType === 'waterfall') {
         data = buildDelta(rawData);
         type = 'column';
         step = undefined;
@@ -351,6 +394,7 @@
         marker,
         data,
         rawData,
+        deltaType,
         color: meta.color || undefined
       };
     });
@@ -366,9 +410,12 @@
         data: Array.isArray(series.data) ? series.data : [],
         color: series.color
       };
-      if (safeType === 'line' || safeType === 'area' || safeType === 'spline' || safeType === 'scatter') {
+      if (safeType === 'line' || safeType === 'area' || safeType === 'spline' || safeType === 'scatter' || safeType === 'column') {
         normalized.step = series.step;
         if (series.marker) normalized.marker = series.marker;
+        if (series.zoneAxis) normalized.zoneAxis = series.zoneAxis;
+        if (series.zones) normalized.zones = series.zones;
+        if (series.lineWidth != null) normalized.lineWidth = series.lineWidth;
       }
       return normalized;
     });
@@ -501,20 +548,39 @@
     }
     const xAxisDatetime = { type: 'datetime', ordinal: false, ...xAxisRange };
 
+    const hasDeltaSeries = built.series.some((series) => resolveDeltaRenderType(series.deltaType || built.widgetType));
+
     const options = {
       chart: { renderTo: chartContainerId, height: chartHeight() },
       title: { text: widgetConfig.name },
       xAxis: xAxisDatetime,
       yAxis: built.mode === 'state'
         ? { title: { text: null }, categories: built.categories }
-        : { title: { text: null } },
+        : {
+          title: { text: null },
+          plotLines: hasDeltaSeries
+            ? [{
+              value: 0,
+              color: c.isLightTheme ? '#6c757d' : '#97a2b2',
+              width: 1,
+              dashStyle: 'ShortDot',
+              zIndex: 3
+            }]
+            : undefined
+        },
       legend: { enabled: widgetConfig.show_legend !== false },
       navigator: {
         enabled: widgetConfig.show_navigator !== false,
         series: { color: c.primary, lineColor: c.primary }
       },
       rangeSelector: { enabled: widgetConfig.show_range_selector !== false, inputEnabled: false },
-      series: sanitizeSeriesForStock(built.series),
+      series: sanitizeSeriesForStock(
+        built.series.map((series) => (
+          resolveDeltaRenderType(series.deltaType || built.widgetType)
+            ? applyDeltaSeriesStyle(series, c)
+            : series
+        ))
+      ),
       exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
       credits: { enabled: false }
     };

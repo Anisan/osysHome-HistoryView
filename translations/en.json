@@ -46,7 +46,7 @@
   "Chart type description areaspline": "Smoothed line with filled area below.",
   "Chart type description bullet": "Current value relative to range and average.",
   "Chart type description column": "Values are shown as vertical columns for easy comparison.",
-  "Chart type description delta": "Shows change between neighboring values (delta).",
+  "Chart type description delta": "Shows change between neighboring values (delta). Available as columns, line, or spline.",
   "Chart type description heatmap24": "Activity by hour and weekday (24x7 matrix).",
   "Chart type description heatmap24value": "Average numeric value by hour and weekday (24x7 matrix).",
   "Chart type description heatmapmonth": "Monthly calendar heatmap of activity by day of month.",

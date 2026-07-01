@@ -46,7 +46,7 @@
   "Chart type description areaspline": "Сглаженная линия с закрашенной областью.",
   "Chart type description bullet": "Текущее значение относительно диапазона и среднего.",
   "Chart type description column": "Значения показываются вертикальными столбцами для наглядного сравнения.",
-  "Chart type description delta": "Показывает изменение между соседними значениями (дельту).",
+  "Chart type description delta": "Показывает изменение между соседними значениями (дельту). Доступны столбцы, линия и сплайн.",
   "Chart type description heatmap24": "Активность по часам и дням недели (матрица 24x7).",
   "Chart type description heatmap24value": "Среднее числовое значение по часам и дням недели (матрица 24x7).",
   "Chart type description heatmapmonth": "Календарная теплокарта активности по дням месяца.",
