@@ -3,6 +3,20 @@
 <li class="breadcrumb-item"><a href="HistoryView">{{ _('HistoryView')}}</a></li>
 {% endblock %}
 {% block module %}
+{# Hide Monaco/AMD define while loading UMD Highcharts, otherwise charts never attach to window.Highcharts #}
+<script>
+(function () {
+  if (window.__highchartsAmdGuardDepth) {
+    window.__highchartsAmdGuardDepth += 1;
+  } else {
+    window.__highchartsAmdGuardDepth = 1;
+    window.__highchartsSavedDefine = window.define;
+    if (typeof window.define === 'function' && window.define.amd) {
+      window.define = undefined;
+    }
+  }
+})();
+</script>
 <script src="/HistoryView/static/highcharts/highstock.js"></script>
 <script src="/HistoryView/static/highcharts/highstock-3d.js"></script>
 <script src="/HistoryView/static/highcharts/highcharts-more.js"></script>
@@ -12,6 +26,26 @@
 <script src="/HistoryView/static/highcharts/exporting.js"></script>
 <script src="/HistoryView/static/highcharts/export-data.js"></script>
 <script src="/HistoryView/static/highcharts/accessibility.js"></script>
+<script>
+(function () {
+  window.__highchartsAmdGuardDepth = (window.__highchartsAmdGuardDepth || 1) - 1;
+  if (window.__highchartsAmdGuardDepth <= 0) {
+    if (window.__highchartsSavedDefine !== undefined) {
+      window.define = window.__highchartsSavedDefine;
+      // Keep Monaco's AMD define from leaking again after Highcharts finished
+      if (window.monaco && typeof window.define === 'function' && window.define.amd) {
+        try {
+          delete window.define.amd;
+        } catch (e) {
+          window.define.amd = undefined;
+        }
+      }
+    }
+    delete window.__highchartsSavedDefine;
+    delete window.__highchartsAmdGuardDepth;
+  }
+})();
+</script>
 
 <style>
   .history-toolbar {
@@ -1687,6 +1721,13 @@
     const chartPalette = qs("chartPalette");
     const key = `${state.objectName}.${state.propertyName}`;
     if (state.lastSuggestedChartKey === key) return;
+    const savedPrefsRaw = window.localStorage.getItem(getPropertyStorageKey());
+    if (savedPrefsRaw) {
+      try {
+        const savedPrefs = JSON.parse(savedPrefsRaw);
+        if (savedPrefs.chartType) return;
+      } catch (_) {}
+    }
     if (suggested && chartType) {
       const hasOption = Array.from(chartType.options).some((option) => option.value === suggested);
       if (hasOption) {

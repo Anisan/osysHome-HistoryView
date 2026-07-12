@@ -1,3 +1,17 @@
+{# Hide Monaco/AMD define while loading UMD Highcharts, otherwise charts never attach to window.Highcharts #}
+<script>
+(function () {
+  if (window.__highchartsAmdGuardDepth) {
+    window.__highchartsAmdGuardDepth += 1;
+  } else {
+    window.__highchartsAmdGuardDepth = 1;
+    window.__highchartsSavedDefine = window.define;
+    if (typeof window.define === 'function' && window.define.amd) {
+      window.define = undefined;
+    }
+  }
+})();
+</script>
 <script src="/HistoryView/static/highcharts/highstock.js"></script>
 <script src="/HistoryView/static/highcharts/highcharts-more.js"></script>
 <script src="/HistoryView/static/highcharts/modules/heatmap.js"></script>
@@ -6,6 +20,26 @@
 <script src="/HistoryView/static/highcharts/exporting.js"></script>
 <script src="/HistoryView/static/highcharts/export-data.js"></script>
 <script src="/HistoryView/static/highcharts/accessibility.js"></script>
+<script>
+(function () {
+  window.__highchartsAmdGuardDepth = (window.__highchartsAmdGuardDepth || 1) - 1;
+  if (window.__highchartsAmdGuardDepth <= 0) {
+    if (window.__highchartsSavedDefine !== undefined) {
+      window.define = window.__highchartsSavedDefine;
+      // Keep Monaco's AMD define from leaking again after Highcharts finished
+      if (window.monaco && typeof window.define === 'function' && window.define.amd) {
+        try {
+          delete window.define.amd;
+        } catch (e) {
+          window.define.amd = undefined;
+        }
+      }
+    }
+    delete window.__highchartsSavedDefine;
+    delete window.__highchartsAmdGuardDepth;
+  }
+})();
+</script>
 
 <div id="widget_history_{{ widget_config.id }}" style="height:100%; display:flex; flex-direction:column; gap:.5rem; overflow:hidden;">
   <div id="chart_{{ widget_config.id }}" style="flex:1; min-height:0; width:100%;"></div>
