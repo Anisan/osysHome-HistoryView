@@ -123,29 +123,36 @@
         <div class="mb-3">
           <label for="chart_type" class="form-label">{{ _('Chart Type') }}</label>
           <select class="form-select" id="chart_type" name="chart_type" v-model="formData.chart_type" required>
-            <option value="line">{{ _('Line') }}</option>
-            <option value="column">{{ _('Column') }}</option>
-            <option value="spline">{{ _('Spline') }}</option>
-            <option value="area">{{ _('Area') }}</option>
-            <option value="step">{{ _('Step') }}</option>
-            <option value="areaspline">{{ _('Area Spline') }}</option>
-            <option value="scatter">{{ _('Scatter') }}</option>
-            <option value="steparea">{{ _('Step Area') }}</option>
-            <option value="movingavg">{{ _('Moving Average') }}</option>
-            <option value="delta">{{ _('Delta') }}</option>
-            <option value="delta_line">{{ _('Delta') }} ({{ _('Line') }})</option>
-            <option value="delta_spline">{{ _('Delta') }} ({{ _('Spline') }})</option>
-            <option value="timeline">{{ _('Event Timeline') }}</option>
-            <option value="stepmarkers">{{ _('Step with Markers') }}</option>
-            <option value="linearea">{{ _('Line + Area') }}</option>
-            <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
-            <option value="histogram">{{ _('Histogram') }}</option>
-            <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
-            <option value="waterfall">{{ _('Delta Waterfall') }}</option>
-            <option value="bullet">{{ _('Current Progress') }}</option>
-            <option value="radar24">{{ _('Daily Profile') }}</option>
-            <option value="pie">{{ _('Pie') }}</option>
+            <optgroup label="{{ _('Built-in') }}">
+              <option value="line">{{ _('Line') }}</option>
+              <option value="column">{{ _('Column') }}</option>
+              <option value="spline">{{ _('Spline') }}</option>
+              <option value="area">{{ _('Area') }}</option>
+              <option value="step">{{ _('Step') }}</option>
+              <option value="areaspline">{{ _('Area Spline') }}</option>
+              <option value="scatter">{{ _('Scatter') }}</option>
+              <option value="steparea">{{ _('Step Area') }}</option>
+              <option value="movingavg">{{ _('Moving Average') }}</option>
+              <option value="delta">{{ _('Delta') }}</option>
+              <option value="delta_line">{{ _('Delta') }} ({{ _('Line') }})</option>
+              <option value="delta_spline">{{ _('Delta') }} ({{ _('Spline') }})</option>
+              <option value="timeline">{{ _('Event Timeline') }}</option>
+              <option value="media">{{ _('Media timeline') }}</option>
+              <option value="stepmarkers">{{ _('Step with Markers') }}</option>
+              <option value="linearea">{{ _('Line + Area') }}</option>
+              <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
+              <option value="histogram">{{ _('Histogram') }}</option>
+              <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
+              <option value="waterfall">{{ _('Delta Waterfall') }}</option>
+              <option value="bullet">{{ _('Current Progress') }}</option>
+              <option value="radar24">{{ _('Daily Profile') }}</option>
+              <option value="pie">{{ _('Pie') }}</option>
+            </optgroup>
+            <optgroup v-if="chartTypes.length" label="{{ _('Custom') }}">
+              <option v-for="ct in chartTypes" :key="ct.id" :value="'custom:' + ct.id">[[ ct.name ]]</option>
+            </optgroup>
           </select>
+          <input type="hidden" name="custom_chart_type_id" :value="customChartTypeId">
         </div>
 
         <div class="mb-3">
@@ -254,6 +261,7 @@ new Vue({
   delimiters: ['[[', ']]'],
   data: {
     widget_edit: {% if widget_edit %}{{ widget_edit | tojson }}{% else %}null{% endif %},
+    chartTypes: {{ chart_types | default([]) | tojson }},
     objects: {},
     formData: {
       name: '',
@@ -272,6 +280,13 @@ new Vue({
     }
   },
   computed: {
+    customChartTypeId() {
+      const value = this.formData.chart_type || '';
+      if (window.HistoryViewChartRenderer) {
+        return window.HistoryViewChartRenderer.parseChartSelection(value).customId || '';
+      }
+      return value.startsWith('custom:') ? value.substring('custom:'.length) : '';
+    },
     objectOptions() {
       const list = {};
       Object.keys(this.objects).forEach(key => {
@@ -347,7 +362,18 @@ new Vue({
     if (this.widget_edit) {
       this.formData.name = this.widget_edit.name || '';
       this.formData.period = this.widget_edit.period || 24;
-      this.formData.chart_type = this.widget_edit.chart_type || 'line';
+      if (this.widget_edit.custom_chart_type_id || this.widget_edit.chart_type) {
+        this.formData.chart_type = window.HistoryViewChartRenderer
+          ? window.HistoryViewChartRenderer.formatChartSelection(
+              this.widget_edit.chart_type,
+              this.widget_edit.custom_chart_type_id
+            )
+          : (this.widget_edit.custom_chart_type_id
+              ? ('custom:' + this.widget_edit.custom_chart_type_id)
+              : (this.widget_edit.chart_type || 'line'));
+      } else {
+        this.formData.chart_type = 'line';
+      }
       this.formData.chart_palette = this.widget_edit.chart_palette || 'classic';
       this.formData.chart_bucket = this.widget_edit.chart_bucket || 'auto';
       this.formData.show_legend = this.widget_edit.show_legend !== false;

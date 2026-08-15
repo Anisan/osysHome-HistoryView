@@ -251,7 +251,7 @@ Widgets turn one or several history series into a reusable chart for dashboards 
 | `Linked property` | Property from that object |
 | `Series Type` | Per-property override such as `line` or `step` |
 | `Color` | Optional fixed color for one series |
-| `Chart Type` | Global fallback chart type |
+| `Chart Type` | Chart type (built-in or custom from the Custom group) |
 | `Show Legend` | Enables or hides the legend |
 | `Show Navigator` | Enables or hides the Highcharts navigator |
 | `Show Range Selector` | Enables or hides range buttons in fullscreen stock charts |
@@ -268,6 +268,247 @@ Widgets turn one or several history series into a reusable chart for dashboards 
 
 > [!WARNING]
 > `pie` is best for compact distribution summaries. For time-based trend comparison across several properties, use `line`, `spline`, `column`, `area`, or `step`.
+
+---
+
+## Custom chart types
+
+A custom chart type is a named Highcharts render configuration. It appears in the same **Chart Type** dropdown as built-ins (group **Custom**).
+
+Where it applies:
+
+- property history page (`/admin/HistoryView?object=...&name=...`);
+- widget form and widget / widget page rendering.
+
+Types are stored in the plugin config (`chart_types`). After save, refresh the page to see them in selectors.
+
+### Create in admin UI
+
+1. Open `/admin/HistoryView`.
+2. In **Chart Types**, click **Create Chart Type**.
+3. Fill in:
+
+| Field | Description |
+| --- | --- |
+| **Name** | Label in the Chart Type dropdown |
+| **Engine** | `JavaScript transform` or `Options merge (JSON)` |
+| **Options (JSON)** | For `options_merge` — Highcharts options object |
+| **Transform JS** | For `js` — `function(ctx) { ... }` |
+
+4. Save. The type appears in the list and under Chart Type → Custom.
+
+Edit/delete from the chart types table. Deleting a type unlinks widgets that referenced it (built-in `chart_type` remains).
+
+### Engines
+
+| `engine` | When to use | Behavior |
+| --- | --- | --- |
+| `options_merge` | Small tweaks to the base chart | Deep-merge JSON onto built-in options |
+| `js` | Custom logic (gauge, bands, aggregations) | `function(ctx)` must return full Highcharts options |
+
+> [!NOTE]
+> Built-in **Media** (image URL timeline) is a module preset, not a custom type. Custom types support only `js` and `options_merge`.
+
+### Engine: Options merge
+
+Use when the base line/column/area chart is fine and you only need Highcharts tweaks.
+
+Example **Options (JSON)**:
+
+```json
+{
+  "chart": { "type": "areaspline" },
+  "plotOptions": {
+    "series": {
+      "fillOpacity": 0.25,
+      "marker": { "enabled": false }
+    }
+  },
+  "legend": { "enabled": true }
+}
+```
+
+Rules:
+
+- root must be a JSON object `{}`, not an array;
+- nested objects merge recursively; arrays and scalars replace;
+- on widgets, merge runs on widget stock options; on the property page, on the built-in mode options.
+
+### Engine: JavaScript transform
+
+Code runs **in the browser** (admin / widget page), not on the server. It must return a Highcharts options object.
+
+**Transform JS** format:
+
+```javascript
+function(ctx) {
+  // ...
+  return { chart: { type: "line" }, series: [] };
+}
+```
+
+#### `ctx` fields
+
+| Field | Available | Description |
+| --- | --- | --- |
+| `payload` | property page; on widgets — first property + `title` | History data: `entries`, `series`, `range`, `property_label`, `mode`, … |
+| `payloads` | widget | `{ "Object.prop": payload, ... }` for all series |
+| `widgetConfig` | widget | Widget config (`name`, `period`, UI flags, …) |
+| `baseOptions` | when refining | Already built-in chart options (if any) |
+| `theme` | everywhere | Theme/palette colors (`primary`, …) |
+| `targetId` | everywhere | DOM container id for `chart.renderTo` |
+| `chartHeight` | everywhere | Suggested height |
+| `compact` | property page | Compact mode |
+| `formatDate` | everywhere | `(tsMs) => string` |
+| `labels` | everywhere | Localized labels |
+| `xAxisRange` | property page | `{ min, max }` for selected range |
+| `Highcharts` | usually widget | Global Highcharts reference |
+
+Typical series access:
+
+```javascript
+const seriesMap = (ctx.payload && ctx.payload.series) || {};
+const firstKey = Object.keys(seriesMap)[0];
+const points = (firstKey && seriesMap[firstKey] && seriesMap[firstKey].data) || [];
+// points: [[timestampMs, y], ...]
+```
+
+The renderer fills `chart.renderTo` if missing. Types like `gauge` / `pie` / `solidgauge` use `Highcharts.chart` (not Stock).
+
+#### Example: gauge from last value
+
+```javascript
+function(ctx) {
+  const seriesMap = (ctx.payload && ctx.payload.series) || {};
+  const key = Object.keys(seriesMap)[0];
+  const raw = (key && seriesMap[key] && seriesMap[key].data) || [];
+  let last = 0;
+  for (let i = raw.length - 1; i >= 0; i--) {
+    const p = raw[i];
+    const y = Array.isArray(p) ? p[1] : (p && p.y);
+    if (typeof y === "number" && isFinite(y)) { last = y; break; }
+  }
+  return {
+    chart: { type: "solidgauge", height: ctx.chartHeight || 320 },
+    title: { text: (ctx.payload && ctx.payload.property_label) || "" },
+    pane: {
+      startAngle: -90,
+      endAngle: 90,
+      background: [{ outerRadius: "100%", innerRadius: "60%", shape: "arc" }]
+    },
+    yAxis: {
+      min: 0,
+      max: Math.max(100, last * 1.2),
+      stops: [[0.3, "#55BF3B"], [0.7, "#DDDF0D"], [0.9, "#DF5353"]],
+      lineWidth: 0,
+      tickWidth: 0,
+      title: { text: null }
+    },
+    series: [{ name: "Value", data: [last], dataLabels: { format: "{y:.1f}" } }],
+    credits: { enabled: false },
+    tooltip: { enabled: false }
+  };
+}
+```
+
+#### Example: min/max band around the series
+
+```javascript
+function(ctx) {
+  const seriesMap = (ctx.payload && ctx.payload.series) || {};
+  const key = Object.keys(seriesMap)[0];
+  const raw = (key && seriesMap[key] && seriesMap[key].data) || [];
+  const points = [];
+  for (let i = 0; i < raw.length; i++) {
+    const p = raw[i];
+    const x = Array.isArray(p) ? p[0] : (p && p.x);
+    const y = Array.isArray(p) ? p[1] : (p && p.y);
+    if (typeof x === "number" && typeof y === "number" && isFinite(y)) points.push([x, y]);
+  }
+  const windowSize = Math.max(3, Math.min(31, Math.floor(points.length / 20) || 5));
+  const half = Math.floor(windowSize / 2);
+  const band = [];
+  const mid = [];
+  for (let i = 0; i < points.length; i++) {
+    const from = Math.max(0, i - half);
+    const to = Math.min(points.length, i + half + 1);
+    let min = Infinity, max = -Infinity, sum = 0, n = 0;
+    for (let j = from; j < to; j++) {
+      const y = points[j][1];
+      if (y < min) min = y;
+      if (y > max) max = y;
+      sum += y; n += 1;
+    }
+    band.push([points[i][0], min, max]);
+    mid.push([points[i][0], n ? sum / n : null]);
+  }
+  const theme = ctx.theme || {};
+  return {
+    chart: { height: ctx.chartHeight || 420 },
+    title: { text: (ctx.payload && ctx.payload.property_label) || "" },
+    xAxis: { type: "datetime" },
+    yAxis: { title: { text: null } },
+    series: [
+      { name: "Range", type: "arearange", data: band, color: theme.primary || "#4e79a7", fillOpacity: 0.2, lineWidth: 0, enableMouseTracking: false },
+      { name: "Avg", type: "line", data: mid, color: theme.primary || "#4e79a7" }
+    ],
+    navigator: { enabled: !ctx.compact },
+    rangeSelector: { enabled: !ctx.compact, inputEnabled: false },
+    credits: { enabled: false }
+  };
+}
+```
+
+### Selecting a type in the UI
+
+On the history page and in the widget form there is one **Chart Type** list:
+
+- built-ins (`line`, `step`, `media`, …);
+- **Custom** — your types.
+
+Widget storage:
+
+- `custom_chart_type_id` — custom type id;
+- `chart_type` — fallback built-in (usually `line`) if the custom type is missing.
+
+### Errors and debugging
+
+- If transform throws, the property page shows a failure note; details are in the browser console.
+- `transform_js` is required for `engine=js`; non-empty `options` object is required for `options_merge`.
+- Code must not rely on Node/server modules.
+- To inspect data, open property history and check Network → `history_data`.
+
+### Create via MCP
+
+HistoryView collection `chart_types`:
+
+1. `osys_plugin_entity_schema` / `osys_plugin_capabilities`.
+2. `osys_plugin_validate_entity` → `osys_plugin_upsert_entity`.
+3. Useful invoke ops: `history_data`, `list_presets`, `resolve_chart`.
+
+Minimal payload:
+
+```json
+{
+  "name": "My gauge",
+  "engine": "js",
+  "transform_js": "function(ctx) { return { chart: { type: 'solidgauge' }, series: [{ data: [0] }] }; }",
+  "options": {}
+}
+```
+
+For `options_merge`:
+
+```json
+{
+  "name": "Soft area",
+  "engine": "options_merge",
+  "options": { "chart": { "type": "areaspline" }, "plotOptions": { "series": { "fillOpacity": 0.2 } } }
+}
+```
+
+> [!WARNING]
+> `transform_js` runs in the admin browser. Do not paste untrusted code.
 
 ---
 

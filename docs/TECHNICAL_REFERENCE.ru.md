@@ -56,7 +56,7 @@ sequenceDiagram
 | `title` | `History` |
 | `description` | `History viewer` |
 | `category` | `System` |
-| `version` | `2.0` |
+| `version` | `2.1` |
 | `actions` | `["widget", "page", "search"]` |
 
 ---
@@ -503,6 +503,61 @@ previous_end   = dt_begin
 | `source_pie` | `[[name, count], ...]` | Распределение по источникам |
 | `value_pie` | `[[name, count], ...]` | Распределение по значениям |
 | `duration_column` | `[[name, seconds], ...]` | Суммарное время по каждому состоянию |
+
+---
+
+## Пользовательские типы графиков (`chart_types`)
+
+Хранятся в `self.config["chart_types"]`:
+
+```json
+{
+  "id": "uuid",
+  "name": "Soft area",
+  "engine": "options_merge",
+  "options": { "chart": { "type": "areaspline" } },
+  "transform_js": null,
+  "schema_version": 1
+}
+```
+
+Поддерживаемые `engine`: `js`, `options_merge` (`preset` больше не принимается).
+
+| Поле | Назначение |
+| --- | --- |
+| `id` | UUID типа |
+| `name` | Подпись в UI |
+| `engine` | `js` или `options_merge` |
+| `options` | JSON-объект для merge (обязателен при `options_merge`) |
+| `transform_js` | Текст `function(ctx){...}` (обязателен при `js`) |
+| `schema_version` | Версия схемы записи (сейчас `1`) |
+
+Поведение:
+
+- `GET /HistoryView/api/chart_types` — публичный список для UI (без полного `transform_js`, флаг `has_transform_js`).
+- Общий рендерер: `plugins/HistoryView/static/chart_renderer.js` (`HistoryViewChartRenderer`).
+- В UI выбор — единый select: значение `custom:<id>`; в виджете хранится `custom_chart_type_id` (+ fallback `chart_type`).
+- Сервис: `plugins/HistoryView/services/chart_types.py` (`parse_chart_selection`, `upsert_chart_type`, `resolve_chart_definition`, …).
+- Подробные примеры для авторов типов: [USER_GUIDE.ru.md — Пользовательские типы графиков](USER_GUIDE.ru.md#пользовательские-типы-графиков).
+
+Контекст `ctx` для `transform_js` (браузер): `payload` / `payloads`, `theme`, `targetId`, `chartHeight`, `baseOptions`, `formatDate`, `labels`, `xAxisRange`, при виджете также `widgetConfig`, `Highcharts`.
+
+---
+
+## MCP
+
+Коллекции (`binding_mode: none`):
+
+| Collection | Описание |
+| --- | --- |
+| `chart_types` | CRUD пользовательских типов (`has_code: true` для `transform_js`) |
+| `widgets` | CRUD виджетов |
+
+Операции `mcp_invoke`:
+
+- `history_data` — обёртка `_build_property_payload`
+- `list_presets` — built-in + custom types
+- `resolve_chart` — resolved definition для виджета/свойства
 
 ---
 

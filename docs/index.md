@@ -15,6 +15,7 @@ The `HistoryView` documentation is split into two core documents:
 - [Quick start checklist](USER_GUIDE.md#quick-start-checklist)
 - [Chart behavior by property type](USER_GUIDE.md#chart-behavior-by-property-type)
 - [Creating a widget](USER_GUIDE.md#creating-a-widget)
+- [Custom chart types](USER_GUIDE.md#custom-chart-types)
 - [Viewing widgets](USER_GUIDE.md#viewing-widgets)
 - [History API](TECHNICAL_REFERENCE.md#history-api)
 - [Payload structure](TECHNICAL_REFERENCE.md#payload-structure)

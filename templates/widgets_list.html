@@ -9,6 +9,49 @@
   </div>
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">{{ _('Chart Types') }}</h5>
+      <a href="?op=create_chart_type" class="btn btn-outline-primary btn-sm">
+        <i class="fa-solid fa-plus me-2"></i>{{ _('Create Chart Type') }}
+      </a>
+    </div>
+
+    {% if chart_types %}
+    <div class="table-responsive mb-4">
+      <table class="table table-striped table-sm">
+        <thead>
+          <tr>
+            <th>{{ _('Name') }}</th>
+            <th>{{ _('Engine') }}</th>
+            <th>{{ _('Actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for chart_type in chart_types %}
+          <tr>
+            <td>{{ chart_type.name }}</td>
+            <td>{{ chart_type.engine }}</td>
+            <td>
+              <a href="?op=edit_chart_type&chart_type_id={{ chart_type.id }}" class="btn btn-sm btn-primary me-1">
+                <i class="fa-solid fa-pencil"></i>
+              </a>
+              <a href="?op=delete_chart_type&chart_type_id={{ chart_type.id }}" class="btn btn-sm btn-danger"
+                 onclick="return confirm('{{ _('Are you sure?') }}')">
+                <i class="fa-solid fa-trash"></i>
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">{{ _('No chart types created yet.') }}</p>
+    <a href="?op=create_chart_type" class="btn btn-outline-primary btn-sm mb-4">
+      <i class="fa-solid fa-plus me-2"></i>{{ _('Create First Chart Type') }}
+    </a>
+    {% endif %}
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
       <h5 class="mb-0">{{ _('Widgets') }}</h5>
       <a href="?op=create_widget" class="btn btn-primary btn-sm">
         <i class="fa-solid fa-plus me-2"></i>{{ _('Create Widget') }}
@@ -64,7 +107,14 @@
                 {{ _('Year') }}
               {% endif %}
             </td>
-            <td>{{ widget.chart_type }}</td>
+            <td>
+              {% if widget.custom_chart_type_id %}
+                {% set matches = chart_types | selectattr('id', 'equalto', widget.custom_chart_type_id) | list %}
+                <span class="badge bg-info">{% if matches %}{{ matches[0].name }}{% else %}{{ _('Custom Chart Type') }}{% endif %}</span>
+              {% else %}
+                {{ widget.chart_type }}
+              {% endif %}
+            </td>
             <td>
               <a href="/page/HistoryView?widget_id={{ widget.id }}" class="btn btn-sm btn-success me-1" target="_blank" rel="noopener">
                 <i class="fa-solid fa-chart-line me-1"></i>{{ _('Open') }}

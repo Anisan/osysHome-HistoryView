@@ -13,19 +13,36 @@ from app.core.main.ObjectsStorage import objects_storage
 from app.core.models.Clasess import History, Object
 from app.database import session_scope
 
+from plugins.HistoryView.services import chart_types as chart_types_service
+
 
 class HistoryView(BasePlugin):
 
     def __init__(self, app):
-        super().__init__(app, __name__)
+        super().__init__(app, "HistoryView")
         self.title = "History"
         self.description = """History viewer"""
         self.category = "System"
-        self.version = "2.0"
+        self.version = "2.6"
         self.actions = ["widget", "page", "search"]
 
     def initialization(self):
-        pass
+        if "chart_types" not in self.config:
+            self.config["chart_types"] = []
+            self.saveConfig()
+
+    def _chart_types_list(self):
+        return chart_types_service.list_chart_types(self.config)
+
+    def _get_chart_type(self, type_id):
+        return chart_types_service.get_chart_type(self.config, type_id)
+
+    def _resolve_chart_definition(self, custom_chart_type_id=None, chart_type="line"):
+        return chart_types_service.resolve_chart_definition(
+            self.config,
+            custom_chart_type_id=custom_chart_type_id,
+            chart_type=chart_type,
+        )
 
     def route_history_api(self):
         @self.blueprint.route(f"/{self.name}/api/history_data", methods=["GET"])
@@ -58,6 +75,16 @@ class HistoryView(BasePlugin):
             except Exception as exc:
                 self.logger.exception("History API failed for %s.%s: %s", object_name, property_name, exc)
                 return jsonify({"success": False, "message": "Failed to build history data"}), 500
+
+    def route_chart_types_api(self):
+        @self.blueprint.route(f"/{self.name}/api/chart_types", methods=["GET"])
+        @handle_admin_required
+        def chart_types_api():
+            items = [
+                chart_types_service.chart_type_public_dict(item)
+                for item in self._chart_types_list()
+            ]
+            return jsonify({"success": True, "result": items})
 
     def widgets(self):
         widgets_list = self.config.get("widgets", [])
@@ -294,7 +321,10 @@ class HistoryView(BasePlugin):
                 }
             )
 
-        if mode == "state":
+        if chart_types_service.suggest_media_preset(entries):
+            hints["suggested_chart_type"] = "media"
+            hints["suggested_custom_preset"] = "media"
+        elif mode == "state":
             hints["suggested_chart_type"] = "step"
         elif mode == "boolean" or self._is_binary_signal(timeline_entries):
             hints["suggested_chart_type"] = "step"
@@ -833,7 +863,7 @@ class HistoryView(BasePlugin):
             payload["widget_meta"] = {"chart_type": item.get("chart_type"), "color": item.get("color")}
             properties_payloads[item["name"]] = payload
 
-        return {"widget_config": widget_config, "properties_payloads": properties_payloads}
+        return {"widget_config": widget_config, "properties_payloads": properties_payloads, "chart_types": self._chart_types_list(), "chart_definition": self._resolve_chart_definition(widget_config.get("custom_chart_type_id"), widget_config.get("chart_type", "line"))}
 
     def widget(self, name: str = None, _settings: dict = None):
         context = self._build_widget_context(name)
@@ -913,13 +943,55 @@ class HistoryView(BasePlugin):
         name = request.args.get("name", None)
 
         if op == "create_widget":
-            return render_template("widget_form.html", widget_edit=None)
+            return render_template("widget_form.html", widget_edit=None, chart_types=self._chart_types_list())
 
         if op == "edit_widget":
             widget_id = request.args.get("widget_id", None)
             widgets_list = self.config.get("widgets", [])
             widget_edit = next((w for w in widgets_list if w.get("id") == widget_id), None)
-            return render_template("widget_form.html", widget_edit=widget_edit)
+            return render_template("widget_form.html", widget_edit=widget_edit, chart_types=self._chart_types_list())
+
+        if op == "create_chart_type":
+            return render_template("chart_type_form.html", chart_type_edit=None)
+
+        if op == "edit_chart_type":
+            chart_type_id = request.args.get("chart_type_id", None)
+            chart_type_edit = self._get_chart_type(chart_type_id)
+            return render_template("chart_type_form.html", chart_type_edit=chart_type_edit)
+
+        if op == "delete_chart_type":
+            chart_type_id = request.args.get("chart_type_id", None)
+            chart_types_service.delete_chart_type(self.config, chart_type_id)
+            self.saveConfig()
+            return redirect(f"/admin/{self.name}")
+
+        if op == "save_chart_type" and flask_request.method == "POST":
+            chart_type_id = flask_request.form.get("chart_type_id")
+            try:
+                chart_types_service.upsert_chart_type(
+                    self.config,
+                    {
+                        "name": flask_request.form.get("chart_type_name", "").strip(),
+                        "engine": flask_request.form.get("engine", "js"),
+                        "options": flask_request.form.get("options_json", ""),
+                        "transform_js": flask_request.form.get("transform_js", ""),
+                    },
+                    type_id=None if not chart_type_id or chart_type_id == "new" else chart_type_id,
+                )
+            except ValueError as exc:
+                return render_template(
+                    "chart_type_form.html",
+                    chart_type_edit={
+                        "id": chart_type_id,
+                        "name": flask_request.form.get("chart_type_name", ""),
+                        "engine": flask_request.form.get("engine", "js"),
+                        "options": flask_request.form.get("options_json", ""),
+                        "transform_js": flask_request.form.get("transform_js", ""),
+                    },
+                    form_error=str(exc),
+                )
+            self.saveConfig()
+            return redirect(f"/admin/{self.name}")
 
         if op == "delete_widget":
             widget_id = request.args.get("widget_id", None)
@@ -934,7 +1006,12 @@ class HistoryView(BasePlugin):
             period = int(flask_request.form.get("period", 24))
             properties_str = flask_request.form.get("properties", "")
             properties_json = flask_request.form.get("properties_json", "")
-            chart_type = flask_request.form.get("chart_type", "line")
+            chart_type_raw = (flask_request.form.get("chart_type", "line") or "line").strip()
+            form_custom_id = flask_request.form.get("custom_chart_type_id", "").strip() or None
+            chart_type, custom_chart_type_id = chart_types_service.parse_chart_selection(
+                chart_type_raw,
+                form_custom_id,
+            )
             chart_palette = flask_request.form.get("chart_palette", "classic")
             chart_bucket = flask_request.form.get("chart_bucket", "auto").strip().lower()
             if chart_bucket not in {"auto", "raw"}:
@@ -975,6 +1052,7 @@ class HistoryView(BasePlugin):
                                 "period": period,
                                 "properties": properties,
                                 "chart_type": chart_type,
+                                "custom_chart_type_id": custom_chart_type_id,
                                 "chart_palette": chart_palette,
                                 "chart_bucket": chart_bucket,
                                 "show_legend": show_legend,
@@ -994,6 +1072,7 @@ class HistoryView(BasePlugin):
                         "period": period,
                         "properties": properties,
                         "chart_type": chart_type,
+                        "custom_chart_type_id": custom_chart_type_id,
                         "chart_palette": chart_palette,
                         "chart_bucket": chart_bucket,
                         "show_legend": show_legend,
@@ -1019,6 +1098,74 @@ class HistoryView(BasePlugin):
             obj = Object.query.where(Object.id == object_id).one_or_none() if object_id > 0 else None
         if not obj:
             widgets_list = self.config.get("widgets", [])
-            return render_template("widgets_list.html", widgets=widgets_list)
+            chart_types = self._chart_types_list()
+            return render_template("widgets_list.html", widgets=widgets_list, chart_types=chart_types)
 
-        return render_template("history.html", object=obj, name=name)
+        return render_template("history.html", object=obj, name=name, chart_types=self._chart_types_list())
+
+    # --- MCP integration ---
+
+    def mcp_capabilities(self):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_capabilities()
+
+    def mcp_config_schema(self):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_config_schema()
+
+    def mcp_entity_schema(self, collection: str):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_entity_schema(collection)
+
+    def mcp_list_entities(self, collection: str, query: str = None, limit: int = 100):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_list_entities(self, collection, query=query, limit=limit)
+
+    def mcp_get_entity(self, collection: str, entity_id):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_get_entity(self, collection, entity_id)
+
+    def mcp_upsert_entity(self, collection: str, payload: dict, entity_id=None):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_upsert_entity(self, collection, payload, entity_id=entity_id)
+
+    def mcp_delete_entity(self, collection: str, entity_id):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_delete_entity(self, collection, entity_id)
+
+    def mcp_validate_entity_code(self, collection: str, code: str):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_validate_entity_code(collection, code)
+
+    def mcp_run_entity_dry(self, collection: str, code: str, context: dict = None):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_run_entity_dry(collection, code, context=context)
+
+    def mcp_invoke(self, operation: str, params: dict = None):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_invoke(self, operation, params or {})
+
+    def mcp_entity_revision(self, collection: str, entity_id):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_entity_revision(self, collection, entity_id)
+
+    def mcp_validate_entity(self, collection: str, payload: dict, entity_id=None):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_validate_entity(collection, payload, entity_id=entity_id)
+
+    def mcp_supported(self) -> bool:
+        from plugins.HistoryView import mcp_support
+        caps = mcp_support.mcp_capabilities() or {}
+        return bool(caps.get("collections"))
+
+    def mcp_tools(self):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_descriptors()[0]
+
+    def mcp_resources(self):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_descriptors()[1]
+
+    def mcp_prompts(self):
+        from plugins.HistoryView import mcp_support
+        return mcp_support.mcp_descriptors()[2]

@@ -40,6 +40,7 @@
   }
 })();
 </script>
+<script src="/HistoryView/static/chart_renderer.js"></script>
 
 <div id="widget_history_{{ widget_config.id }}" style="height:100%; display:flex; flex-direction:column; gap:.5rem; overflow:hidden;">
   <div id="chart_{{ widget_config.id }}" style="flex:1; min-height:0; width:100%;"></div>
@@ -50,6 +51,7 @@
   const widgetId = {{ widget_config.id|tojson }};
   const widgetConfig = {{ widget_config|tojson }};
   const payloads = {{ properties_payloads|tojson }};
+  const chartDefinition = {{ chart_definition | default({}) | tojson }};
   const chartContainerId = `chart_${widgetId}`;
 
   function getThemeBrightness(hexColor) {
@@ -458,6 +460,45 @@
   function createChart() {
     applyTheme(widgetConfig.use_color_theme !== false);
     const c = colors();
+    const renderer = window.HistoryViewChartRenderer;
+    const firstPayload = Object.values(payloads)[0];
+
+    const customCtxBase = {
+      payloads,
+      widgetConfig,
+      payload: firstPayload
+        ? { ...firstPayload, property_label: widgetConfig.name, title: widgetConfig.name }
+        : { property_label: widgetConfig.name, title: widgetConfig.name },
+      targetId: chartContainerId,
+      compact: false,
+      chartHeight: chartHeight(),
+      theme: c,
+      formatDate: (ts) => new Date(ts).toLocaleString(),
+      labels: {
+        events: '{{ _("Events") }}',
+        change: '{{ _("Change") }}',
+        value: '{{ _("Value") }}',
+        source: '{{ _("Source") }}',
+        mediaSeries: '{{ _("Media timeline") }}'
+      },
+      Highcharts
+    };
+
+    if (
+      renderer
+      && chartDefinition
+      && firstPayload
+      && renderer.shouldUseCustomRenderer(chartDefinition)
+      && (renderer.isMediaDefinition(chartDefinition) || chartDefinition.engine === 'js')
+    ) {
+      try {
+        renderer.renderChart(chartDefinition, { ...customCtxBase, useStock: true });
+        return;
+      } catch (error) {
+        console.error('HistoryView custom widget chart failed', error, chartDefinition);
+      }
+    }
+
     const built = buildSeries();
     if (!built.series.length) {
       document.getElementById(chartContainerId).innerHTML = '<div class="text-center text-muted p-3">{{ _("No data available") }}</div>';
@@ -618,6 +659,20 @@
       exporting: { enabled: {{ 'true' if widget_config.show_context_menu else 'false' }} },
       credits: { enabled: false }
     };
+    if (renderer && chartDefinition && chartDefinition.engine === 'options_merge' && chartDefinition.options) {
+      try {
+        renderer.renderChart(chartDefinition, {
+          ...customCtxBase,
+          baseOptions: options,
+          fallbackOptions: options,
+          useStock: true
+        });
+        return;
+      } catch (error) {
+        console.error('HistoryView options_merge widget chart failed', error, chartDefinition);
+        options = renderer.deepMerge(options, chartDefinition.options);
+      }
+    }
     try {
       Highcharts.stockChart(options);
     } catch (error) {

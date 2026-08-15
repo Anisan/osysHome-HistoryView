@@ -46,6 +46,7 @@
   }
 })();
 </script>
+<script src="/HistoryView/static/chart_renderer.js"></script>
 
 <style>
   .history-toolbar {
@@ -310,6 +311,19 @@
     align-items: center;
     gap: 0.5rem;
   }
+  .history-media-strip .history-media-thumb {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.35rem;
+    padding: 0.15rem;
+    background: var(--bs-body-bg);
+    text-decoration: none;
+    color: inherit;
+    max-width: 130px;
+    overflow: hidden;
+  }
 </style>
 
 <div id="history_view_page">
@@ -402,28 +416,38 @@
                   </span>
                 </label>
                 <select id="chartType" class="form-select form-select-sm">
-                  <option value="line">{{ _('Line') }}</option>
-                  <option value="column">{{ _('Column') }}</option>
-                  <option value="spline">{{ _('Spline') }}</option>
-                  <option value="area">{{ _('Area') }}</option>
-                  <option value="areaspline">{{ _('Area Spline') }}</option>
-                  <option value="scatter">{{ _('Scatter') }}</option>
-                  <option value="step">{{ _('Step Line') }}</option>
-                  <option value="steparea">{{ _('Step Area') }}</option>
-                  <option value="movingavg">{{ _('Moving Average') }}</option>
-                  <option value="delta">{{ _('Delta') }}</option>
-                  <option value="timeline">{{ _('Event Timeline') }}</option>
-                  <option value="stepmarkers">{{ _('Step with Markers') }}</option>
-                  <option value="linearea">{{ _('Line + Area') }}</option>
-                  <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
-                  <option value="histogram">{{ _('Histogram') }}</option>
-                  <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
-                  <option value="heatmap24value">{{ _('Heatmap 24x7 (Value)') }}</option>
-                  <option value="heatmapmonth">{{ _('Heatmap Month x Day (Activity)') }}</option>
-                  <option value="heatmapmonthvalue">{{ _('Heatmap Month x Day (Value)') }}</option>
-                  <option value="waterfall">{{ _('Delta Waterfall') }}</option>
-                  <option value="bullet">{{ _('Current Progress') }}</option>
-                  <option value="radar24">{{ _('Daily Profile') }}</option>
+                  <optgroup label="{{ _('Built-in') }}">
+                    <option value="line">{{ _('Line') }}</option>
+                    <option value="column">{{ _('Column') }}</option>
+                    <option value="spline">{{ _('Spline') }}</option>
+                    <option value="area">{{ _('Area') }}</option>
+                    <option value="areaspline">{{ _('Area Spline') }}</option>
+                    <option value="scatter">{{ _('Scatter') }}</option>
+                    <option value="step">{{ _('Step Line') }}</option>
+                    <option value="steparea">{{ _('Step Area') }}</option>
+                    <option value="movingavg">{{ _('Moving Average') }}</option>
+                    <option value="delta">{{ _('Delta') }}</option>
+                    <option value="timeline">{{ _('Event Timeline') }}</option>
+                    <option value="media">{{ _('Media timeline') }}</option>
+                    <option value="stepmarkers">{{ _('Step with Markers') }}</option>
+                    <option value="linearea">{{ _('Line + Area') }}</option>
+                    <option value="ohlc">{{ _('OHLC by Intervals') }}</option>
+                    <option value="histogram">{{ _('Histogram') }}</option>
+                    <option value="heatmap24">{{ _('Heatmap 24x7') }}</option>
+                    <option value="heatmap24value">{{ _('Heatmap 24x7 (Value)') }}</option>
+                    <option value="heatmapmonth">{{ _('Heatmap Month x Day (Activity)') }}</option>
+                    <option value="heatmapmonthvalue">{{ _('Heatmap Month x Day (Value)') }}</option>
+                    <option value="waterfall">{{ _('Delta Waterfall') }}</option>
+                    <option value="bullet">{{ _('Current Progress') }}</option>
+                    <option value="radar24">{{ _('Daily Profile') }}</option>
+                  </optgroup>
+                  {% if chart_types %}
+                  <optgroup label="{{ _('Custom') }}">
+                    {% for chart_type in chart_types %}
+                    <option value="custom:{{ chart_type.id }}">{{ chart_type.name }}</option>
+                    {% endfor %}
+                  </optgroup>
+                  {% endif %}
                 </select>
               </div>
               <div id="deltaSeriesTypeControl" class="d-none" style="min-width: 180px;">
@@ -476,6 +500,7 @@
             </div>
           </div>
           <div id="mainChart" class="history-chart"></div>
+          <div id="mediaStrip" class="d-none"></div>
           <div id="chartResizeHandle" class="history-chart-resize" role="separator" aria-label="{{ _('Resize chart height') }}" tabindex="0"></div>
           <div id="chartEmptyNote" class="alert alert-warning history-unavailable d-none mb-0"></div>
           <div id="chartUnavailableNote" class="alert alert-secondary history-unavailable d-none mb-0"></div>
@@ -711,7 +736,8 @@
       dir: "desc"
     },
     /** Persisted tab target; DOM .active can lag behind bootstrap.Tab.show(), so prefs must not rely on it alone. */
-    activeTabTarget: null
+    activeTabTarget: null,
+    chartTypes: {{ chart_types | default([]) | tojson }}
   };
   const UI_PREFS_STORAGE_PREFIX = "historyView.uiPrefs";
   const chartI18n = {
@@ -817,7 +843,9 @@
     bulletCurrent: {{ _('Current')|tojson }},
     profileSeries: {{ _('24h Profile')|tojson }},
     profileAxisAverage: {{ _('Average value')|tojson }},
-    chartTypeUnavailableDescription: {{ _('Chart type description unavailable')|tojson }},
+    customChartRenderFailed: {{ _('Custom chart render failed')|tojson }},
+    mediaTimeline: {{ _('Media timeline')|tojson }},
+    customChartTypeLabel: {{ _('Custom Chart Type')|tojson }},
     chartTypeAriaPrefix: {{ _('Chart type description')|tojson }},
     metricAriaPrefix: {{ _('Metric description')|tojson }},
     noNumericJumps: {{ _('No numeric jumps for selected period')|tojson }},
@@ -897,8 +925,18 @@
         ? parsed.chartPalette
         : (typeof parsed.heatmapPalette === "string" && parsed.heatmapPalette ? parsed.heatmapPalette : fallback.chartPalette);
       const deltaSeriesCandidate = typeof parsed.deltaSeriesType === "string" ? parsed.deltaSeriesType : fallback.deltaSeriesType;
+      let chartType = typeof parsed.chartType === "string" && parsed.chartType ? parsed.chartType : fallback.chartType;
+      // Migrate legacy separate customChartTypeId preference into chartType value.
+      if (window.HistoryViewChartRenderer) {
+        chartType = window.HistoryViewChartRenderer.formatChartSelection(
+          chartType,
+          typeof parsed.customChartTypeId === "string" ? parsed.customChartTypeId : null
+        );
+      } else if (typeof parsed.customChartTypeId === "string" && parsed.customChartTypeId.trim()) {
+        chartType = `custom:${parsed.customChartTypeId.trim()}`;
+      }
       return {
-        chartType: typeof parsed.chartType === "string" && parsed.chartType ? parsed.chartType : fallback.chartType,
+        chartType,
         deltaSeriesType: ["column", "line", "spline"].includes(deltaSeriesCandidate) ? deltaSeriesCandidate : fallback.deltaSeriesType,
         chartPalette: paletteCandidate,
         chartBucket: typeof globalBucket === "string" && globalBucket ? globalBucket : (typeof parsed.chartBucket === "string" && parsed.chartBucket ? parsed.chartBucket : fallback.chartBucket),
@@ -2862,7 +2900,10 @@
 
   function buildMainChartOptions(targetId, compact) {
     const mode = getEffectiveMode();
-    const selectedChartType = qs("chartType").value;
+    const selectedChartTypeRaw = qs("chartType").value;
+    const selectedChartType = window.HistoryViewChartRenderer
+      ? window.HistoryViewChartRenderer.parseChartSelection(selectedChartTypeRaw).chartType
+      : (selectedChartTypeRaw.startsWith("custom:") ? "line" : selectedChartTypeRaw);
     const seriesData = state.payload.series || {};
     const entries = state.payload.entries || [];
     const isLightTheme = getThemeBrightness(getThemeColors().bg) > 170;
@@ -3477,18 +3518,118 @@
     help.setAttribute("aria-label", `${historyText.chartTypeAriaPrefix} "${label}": ${text}`);
   }
 
+  function getActiveChartDefinition() {
+    const chartTypeValue = qs("chartType")?.value || state.uiPrefs?.chartType || "line";
+    const renderer = window.HistoryViewChartRenderer;
+    if (!renderer) {
+      const fallback = String(chartTypeValue || "line");
+      return { source: "builtin", engine: "builtin", preset: fallback, chart_type: fallback };
+    }
+    return renderer.resolveDefinitionFromSelection(state.chartTypes, chartTypeValue);
+  }
+
   function renderChartInto(targetId, compact) {
-    const { chartOptions, caption, useStock } = buildMainChartOptions(targetId, compact);
-    if (targetId === "mainChart") qs("chartCaption").textContent = caption;
+    const built = buildMainChartOptions(targetId, compact);
+    let chartOptions = built.chartOptions;
+    let caption = built.caption;
+    let useStock = built.useStock;
+    const definition = getActiveChartDefinition();
+    const renderer = window.HistoryViewChartRenderer;
+    const unavailableNote = qs("chartUnavailableNote");
+
+    if (targetId === "mainChart" && unavailableNote) {
+      unavailableNote.classList.add("d-none");
+      unavailableNote.textContent = "";
+    }
+
+    if (renderer && renderer.shouldUseCustomRenderer(definition)) {
+      const isLightTheme = getThemeBrightness(getThemeColors().bg) > 170;
+      const selectedPalette = qs("chartPalette")?.value || state.uiPrefs?.chartPalette || "classic";
+      const themeColors = {
+        ...getThemeColors(),
+        ...getChartPaletteOverrides(selectedPalette, isLightTheme)
+      };
+      const payloadRange = state.payload?.range || {};
+      const xAxisRange = {};
+      const rangeBeginMs = payloadRange.dt_begin ? Date.parse(payloadRange.dt_begin) : NaN;
+      const rangeEndMs = payloadRange.dt_end ? Date.parse(payloadRange.dt_end) : NaN;
+      if (Number.isFinite(rangeBeginMs)) xAxisRange.min = rangeBeginMs;
+      if (Number.isFinite(rangeEndMs)) xAxisRange.max = rangeEndMs;
+      if (xAxisRange.min != null && xAxisRange.max != null && xAxisRange.min >= xAxisRange.max) {
+        delete xAxisRange.min;
+        delete xAxisRange.max;
+      }
+      const ctx = {
+        payload: state.payload,
+        targetId,
+        compact,
+        chartHeight: state.chartHeight,
+        theme: themeColors,
+        formatDate,
+        labels: {
+          events: historyText.timelineEvents,
+          change: historyText.timelineChange,
+          value: historyText.timelineValue,
+          source: historyText.timelineSource,
+          mediaSeries: historyText.mediaTimeline
+        },
+        xAxisRange,
+        mediaStripId: targetId === "mainChart" ? "mediaStrip" : null,
+        baseOptions: chartOptions,
+        fallbackOptions: chartOptions,
+        useStock: useStock !== false
+      };
+
+      if (renderer.isMediaDefinition(definition)) {
+        caption = `${historyText.captionViewPrefix}: ${historyText.mediaTimeline}`;
+      } else if (definition.source === "custom") {
+        caption = definition.name || historyText.customChartTypeLabel;
+      }
+
+      if (targetId === "mainChart") qs("chartCaption").textContent = caption || "";
+      if (targetId === "mainChart" && state.mainChart) {
+        state.mainChart.destroy();
+        state.mainChart = null;
+      }
+
+      try {
+        const result = renderer.renderChart(
+          definition,
+          ctx,
+          useStock === false ? Highcharts.chart : Highcharts.stockChart
+        );
+        if (result.error) {
+          console.error("Custom chart render failed", result.error, definition);
+          if (unavailableNote && targetId === "mainChart") {
+            unavailableNote.textContent = historyText.customChartRenderFailed;
+            unavailableNote.classList.remove("d-none");
+          }
+        }
+        if (targetId === "mainChart") state.mainChart = result.chart;
+        return;
+      } catch (error) {
+        console.error("Custom chart render failed", error, definition);
+        if (unavailableNote && targetId === "mainChart") {
+          unavailableNote.textContent = historyText.customChartRenderFailed;
+          unavailableNote.classList.remove("d-none");
+        }
+      }
+    } else if (targetId === "mainChart") {
+      const strip = qs("mediaStrip");
+      if (strip) {
+        strip.innerHTML = "";
+        strip.classList.add("d-none");
+      }
+    }
+
+    if (targetId === "mainChart") qs("chartCaption").textContent = caption || "";
     if (targetId === "mainChart" && state.mainChart) {
       state.mainChart.destroy();
       state.mainChart = null;
     }
     const chartBuilder = useStock === false ? Highcharts.chart : Highcharts.stockChart;
     const chart = chartBuilder(chartOptions);
-    if (targetId === "mainChart") {
-      state.mainChart = chart;
-    }
+    if (targetId === "mainChart") state.mainChart = chart;
   }
 
   function bindChartResize() {

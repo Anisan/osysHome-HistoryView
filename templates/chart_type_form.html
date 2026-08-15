@@ -1,0 +1,109 @@
+{% extends "layouts/module_admin.html" %}
+{% from "macros/code_editor.html" import render_editor %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="HistoryView">{{ _('HistoryView')}}</a></li>
+{% endblock %}
+{% block module %}
+{% set options_data = (
+  (chart_type_edit.options if chart_type_edit.options is string else (chart_type_edit.options | tojson(indent=2)))
+  if chart_type_edit and chart_type_edit.options else '{}'
+) %}
+{% set transform_data = (chart_type_edit.transform_js if chart_type_edit and chart_type_edit.transform_js else '') %}
+{% set options_field = {'name': 'options_json', 'data': options_data} %}
+{% set transform_field = {'name': 'transform_js', 'data': transform_data} %}
+<div class="card mb-3">
+  <div class="card-header">
+    <h4 class="mb-0">
+      {% if chart_type_edit %}{{ _('Edit Chart Type') }}{% else %}{{ _('Create Chart Type') }}{% endif %}
+    </h4>
+  </div>
+  <div class="card-body">
+    {% if form_error %}
+    <div class="alert alert-danger">{{ form_error }}</div>
+    {% endif %}
+    <form method="POST" action="?op=save_chart_type" id="chartTypeForm">
+      <input type="hidden" name="chart_type_id" value="{{ chart_type_edit.id if chart_type_edit else 'new' }}">
+
+      <div class="mb-3">
+        <label class="form-label" for="chart_type_name">{{ _('Name') }}</label>
+        <input type="text" class="form-control" id="chart_type_name" name="chart_type_name"
+               value="{{ chart_type_edit.name if chart_type_edit else '' }}" required>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label" for="engine">{{ _('Engine') }}</label>
+        <select class="form-select" id="engine" name="engine">
+          <option value="js" {% if not chart_type_edit or chart_type_edit.engine == 'js' %}selected{% endif %}>{{ _('JavaScript transform') }}</option>
+          <option value="options_merge" {% if chart_type_edit and chart_type_edit.engine == 'options_merge' %}selected{% endif %}>{{ _('Options merge (JSON)') }}</option>
+        </select>
+        <div class="form-text">{{ _('Custom chart type description') }}</div>
+      </div>
+
+      <div class="mb-3" id="optionsField">
+        <label class="form-label" for="options_json">{{ _('Options (JSON)') }}</label>
+        {{ render_editor(options_field, 'json', None, 'HistoryView') }}
+      </div>
+
+      <div class="mb-3" id="transformField">
+        <label class="form-label" for="transform_js">{{ _('Transform JS') }}</label>
+        {{ render_editor(transform_field, 'javascript', None, 'HistoryView') }}
+        <div class="form-text">{{ _('Transform JS help') }}</div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="fa-solid fa-save me-2"></i>{{ _('Save Chart Type') }}
+        </button>
+        <a href="?" class="btn btn-secondary">{{ _('Cancel') }}</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+  const engine = document.getElementById("engine");
+  const optionsField = document.getElementById("optionsField");
+  const transformField = document.getElementById("transformField");
+  const form = document.getElementById("chartTypeForm");
+
+  function resizeEditors() {
+    try {
+      if (window.ace) {
+        document.querySelectorAll("#optionsField .ace_editor, #transformField .ace_editor").forEach(function (el) {
+          var ed = window.ace.edit(el);
+          if (ed) ed.resize();
+        });
+      }
+    } catch (e) { /* ignore */ }
+    window.dispatchEvent(new Event("resize"));
+  }
+
+  function syncFields() {
+    const mode = engine.value;
+    optionsField.classList.toggle("d-none", mode !== "options_merge");
+    transformField.classList.toggle("d-none", mode !== "js");
+    requestAnimationFrame(resizeEditors);
+  }
+
+  function syncHiddenFromEditors() {
+    try {
+      if (window.ace) {
+        ["options_json", "transform_js"].forEach(function (id) {
+          var hidden = document.getElementById(id);
+          var wrap = document.getElementById("editor-" + id);
+          if (!hidden || !wrap) return;
+          var ed = window.ace.edit(wrap);
+          if (ed) hidden.value = ed.getValue();
+        });
+      }
+    } catch (e) { /* monaco syncs on change */ }
+  }
+
+  engine.addEventListener("change", syncFields);
+  if (form) {
+    form.addEventListener("submit", syncHiddenFromEditors);
+  }
+  syncFields();
+})();
+</script>
+{% endblock %}

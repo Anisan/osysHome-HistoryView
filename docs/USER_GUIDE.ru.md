@@ -251,7 +251,7 @@ changed,source,previous_value,value,transition,delta,duration,current_for
 | `Linked property` | Свойство выбранного объекта |
 | `Series Type` | Переопределение типа отдельной серии |
 | `Color` | Необязательный фиксированный цвет серии |
-| `Chart Type` | Основной тип графика по умолчанию |
+| `Chart Type` | Тип графика (встроенный или пользовательский из группы Custom) |
 | `Show Legend` | Показывать или скрывать легенду |
 | `Show Navigator` | Показывать или скрывать навигатор Highcharts |
 | `Show Range Selector` | Показывать или скрывать кнопки выбора диапазона в полноэкранном графике |
@@ -268,6 +268,250 @@ changed,source,previous_value,value,transition,delta,duration,current_for
 
 > [!WARNING]
 > Тип `pie` лучше подходит для компактного отображения распределений. Для анализа трендов во времени по нескольким свойствам лучше использовать `line`, `spline`, `column`, `area` или `step`.
+
+---
+
+## Пользовательские типы графиков
+
+Пользовательский тип — именованная конфигурация рендера Highcharts, которую можно выбрать в том же списке **Chart Type**, что и встроенные типы (группа **Custom**).
+
+Где применяется:
+
+- страница истории свойства (`/admin/HistoryView?object=...&name=...`);
+- форма виджета и отображение виджета / страницы виджета.
+
+Типы хранятся в конфиге плагина (`chart_types`) и доступны сразу после сохранения — без перезапуска, если админка уже открыта, достаточно обновить страницу.
+
+### Создание в админке
+
+1. Откройте `/admin/HistoryView`.
+2. В блоке **Chart Types** нажмите **Create Chart Type**.
+3. Заполните поля:
+
+| Поле | Описание |
+| --- | --- |
+| **Name** | Имя в выпадающем списке Chart Type |
+| **Engine** | Режим: `JavaScript transform` или `Options merge (JSON)` |
+| **Options (JSON)** | Для `options_merge` — объект опций Highcharts |
+| **Transform JS** | Для `js` — функция `function(ctx) { ... }` |
+
+4. Сохраните. Тип появится в списке и в селекторе Chart Type (группа Custom).
+
+Редактирование и удаление — кнопки в таблице типов. При удалении у виджетов, которые ссылались на тип, ссылка снимается (остаётся встроенный `chart_type`).
+
+### Движки
+
+| `engine` | Когда выбирать | Что делает |
+| --- | --- | --- |
+| `options_merge` | Нужны небольшие правки базового графика (цвета, тип серии, подписи) | Deep-merge JSON поверх уже собранных опций встроенного рендера |
+| `js` | Нужна своя логика (gauge, bands, агрегации, другой chart type) | `function(ctx)` должна вернуть полный объект опций Highcharts |
+
+> [!NOTE]
+> Встроенный тип **Media** (таймлайн URL картинок) — это не пользовательский тип, а preset модуля. Пользовательские типы поддерживают только `js` и `options_merge`.
+
+### Engine: Options merge
+
+Подходит, если базовый line/column/area уже устраивает, но нужно подкрутить Highcharts.
+
+Пример **Options (JSON)**:
+
+```json
+{
+  "chart": { "type": "areaspline" },
+  "plotOptions": {
+    "series": {
+      "fillOpacity": 0.25,
+      "marker": { "enabled": false }
+    }
+  },
+  "legend": { "enabled": true }
+}
+```
+
+Правила:
+
+- корневой объект обязан быть JSON-объектом `{}`, не массивом;
+- вложенные объекты сливаются рекурсивно, массивы и скаляры заменяются целиком;
+- для виджета merge идёт поверх stock-опций виджета; на странице свойства — поверх опций выбранного встроенного режима.
+
+### Engine: JavaScript transform
+
+Код выполняется **в браузере** (админка / страница виджета), не на сервере. Должен вернуть объект опций Highcharts.
+
+Формат поля **Transform JS**:
+
+```javascript
+function(ctx) {
+  // ...
+  return { chart: { type: "line" }, series: [] };
+}
+```
+
+Допустима и стрелочная / анонимная функция в том же виде (выражение функции целиком).
+
+#### Контекст `ctx`
+
+| Поле | Где доступно | Описание |
+| --- | --- | --- |
+| `payload` | страница свойства; у виджета — первое свойство + `title` | Данные истории: `entries`, `series`, `range`, `property_label`, `mode`, … |
+| `payloads` | виджет | Словарь `{ "Object.prop": payload, ... }` по всем сериям |
+| `widgetConfig` | виджет | Конфиг виджета (`name`, `period`, флаги UI, …) |
+| `baseOptions` | при merge/доработке | Уже собранные опции встроенного графика (если есть) |
+| `theme` | везде | Цвета темы/палитры (`primary`, …) |
+| `targetId` | везде | id DOM-контейнера для `chart.renderTo` |
+| `chartHeight` | везде | Рекомендуемая высота |
+| `compact` | страница свойства | Компактный режим |
+| `formatDate` | везде | `(tsMs) => string` |
+| `labels` | везде | Локализованные подписи (events, value, source, …) |
+| `xAxisRange` | страница свойства | `{ min, max }` по выбранному диапазону |
+| `Highcharts` | обычно виджет | Ссылка на глобальный Highcharts |
+
+На практике удобно брать точки из `ctx.payload.series`:
+
+```javascript
+// типичная форма: series.value.data = [[timestampMs, y], ...]
+const seriesMap = (ctx.payload && ctx.payload.series) || {};
+const firstKey = Object.keys(seriesMap)[0];
+const points = (firstKey && seriesMap[firstKey] && seriesMap[firstKey].data) || [];
+```
+
+Рендерер сам проставит `chart.renderTo`, если его нет. Для типов вроде `gauge` / `pie` / `solidgauge` используется обычный `Highcharts.chart` (не Stock).
+
+#### Пример: gauge по последнему значению
+
+```javascript
+function(ctx) {
+  const seriesMap = (ctx.payload && ctx.payload.series) || {};
+  const key = Object.keys(seriesMap)[0];
+  const raw = (key && seriesMap[key] && seriesMap[key].data) || [];
+  let last = 0;
+  for (let i = raw.length - 1; i >= 0; i--) {
+    const p = raw[i];
+    const y = Array.isArray(p) ? p[1] : (p && p.y);
+    if (typeof y === "number" && isFinite(y)) { last = y; break; }
+  }
+  const theme = ctx.theme || {};
+  return {
+    chart: { type: "solidgauge", height: ctx.chartHeight || 320 },
+    title: { text: (ctx.payload && ctx.payload.property_label) || "" },
+    pane: {
+      startAngle: -90,
+      endAngle: 90,
+      background: [{ outerRadius: "100%", innerRadius: "60%", shape: "arc" }]
+    },
+    yAxis: {
+      min: 0,
+      max: Math.max(100, last * 1.2),
+      stops: [[0.3, "#55BF3B"], [0.7, "#DDDF0D"], [0.9, "#DF5353"]],
+      lineWidth: 0,
+      tickWidth: 0,
+      title: { text: null }
+    },
+    series: [{ name: "Value", data: [last], dataLabels: { format: "{y:.1f}" } }],
+    credits: { enabled: false },
+    tooltip: { enabled: false }
+  };
+}
+```
+
+#### Пример: полоса min/max вокруг ряда
+
+```javascript
+function(ctx) {
+  const seriesMap = (ctx.payload && ctx.payload.series) || {};
+  const key = Object.keys(seriesMap)[0];
+  const raw = (key && seriesMap[key] && seriesMap[key].data) || [];
+  const points = [];
+  for (let i = 0; i < raw.length; i++) {
+    const p = raw[i];
+    const x = Array.isArray(p) ? p[0] : (p && p.x);
+    const y = Array.isArray(p) ? p[1] : (p && p.y);
+    if (typeof x === "number" && typeof y === "number" && isFinite(y)) points.push([x, y]);
+  }
+  const windowSize = Math.max(3, Math.min(31, Math.floor(points.length / 20) || 5));
+  const half = Math.floor(windowSize / 2);
+  const band = [];
+  const mid = [];
+  for (let i = 0; i < points.length; i++) {
+    const from = Math.max(0, i - half);
+    const to = Math.min(points.length, i + half + 1);
+    let min = Infinity, max = -Infinity, sum = 0, n = 0;
+    for (let j = from; j < to; j++) {
+      const y = points[j][1];
+      if (y < min) min = y;
+      if (y > max) max = y;
+      sum += y; n += 1;
+    }
+    band.push([points[i][0], min, max]);
+    mid.push([points[i][0], n ? sum / n : null]);
+  }
+  const theme = ctx.theme || {};
+  return {
+    chart: { height: ctx.chartHeight || 420 },
+    title: { text: (ctx.payload && ctx.payload.property_label) || "" },
+    xAxis: { type: "datetime" },
+    yAxis: { title: { text: null } },
+    series: [
+      { name: "Range", type: "arearange", data: band, color: theme.primary || "#4e79a7", fillOpacity: 0.2, lineWidth: 0, enableMouseTracking: false },
+      { name: "Avg", type: "line", data: mid, color: theme.primary || "#4e79a7" }
+    ],
+    navigator: { enabled: !ctx.compact },
+    rangeSelector: { enabled: !ctx.compact, inputEnabled: false },
+    credits: { enabled: false }
+  };
+}
+```
+
+### Как выбрать тип в UI
+
+На странице истории и в форме виджета открывается один список **Chart Type**:
+
+- встроенные типы (`line`, `step`, `media`, …);
+- группа **Custom** — ваши типы.
+
+В хранилище виджета это раскладывается так:
+
+- `custom_chart_type_id` — id пользовательского типа;
+- `chart_type` — запасной встроенный тип (обычно `line`), если custom недоступен.
+
+### Ошибки и отладка
+
+- Если transform падает, на странице свойства показывается сообщение о сбое; в консоли браузера — детали.
+- Проверяйте, что `transform_js` не пустой для `engine=js`, а `options` — непустой объект для `options_merge`.
+- Код не должен содержать `return` вне функции и не должен полагаться на Node/серверные модули.
+- Для отладки данных удобно сначала открыть историю свойства и посмотреть payload / Network → `history_data`.
+
+### Создание через MCP
+
+Коллекция `chart_types` плагина HistoryView:
+
+1. `osys_plugin_entity_schema` / `osys_plugin_capabilities` — схема полей.
+2. `osys_plugin_validate_entity` → при необходимости `osys_plugin_upsert_entity`.
+3. Полезные invoke: `history_data`, `list_presets`, `resolve_chart`.
+
+Минимальный payload:
+
+```json
+{
+  "name": "My gauge",
+  "engine": "js",
+  "transform_js": "function(ctx) { return { chart: { type: 'solidgauge' }, series: [{ data: [0] }] }; }",
+  "options": {}
+}
+```
+
+Для `options_merge`:
+
+```json
+{
+  "name": "Soft area",
+  "engine": "options_merge",
+  "options": { "chart": { "type": "areaspline" }, "plotOptions": { "series": { "fillOpacity": 0.2 } } }
+}
+```
+
+> [!WARNING]
+> `transform_js` выполняется в браузере администратора. Не вставляйте непроверенный код из недоверенных источников.
 
 ---
 
