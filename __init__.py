@@ -23,7 +23,7 @@ class HistoryView(BasePlugin):
         self.title = "History"
         self.description = """History viewer"""
         self.category = "System"
-        self.version = "2.6"
+        self.version = "2.7"
         self.actions = ["widget", "page", "search"]
 
     def initialization(self):
@@ -880,7 +880,11 @@ class HistoryView(BasePlugin):
             return render_template("widget_page.html", **context)
 
         widgets_list = self.config.get("widgets", [])
-        return render_template("widgets_page_list.html", widgets=widgets_list)
+        return render_template(
+            "widgets_page_list.html",
+            widgets=widgets_list,
+            chart_types=self._chart_types_list(),
+        )
 
     def search(self, query: str) -> list:
         res = []

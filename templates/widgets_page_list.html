@@ -17,7 +17,14 @@
           <h5 class="card-title">{{ widget.name }}</h5>
           <p class="card-text">
             <small class="text-muted">
-              <strong>{{ _('Chart Type') }}:</strong> {{ widget.chart_type }}<br>
+              <strong>{{ _('Chart Type') }}:</strong>
+              {% if widget.custom_chart_type_id %}
+                {% set matches = chart_types | selectattr('id', 'equalto', widget.custom_chart_type_id) | list %}
+                {% if matches %}{{ matches[0].name }}{% else %}{{ _('Custom Chart Type') }}{% endif %}
+              {% else %}
+                {{ widget.chart_type }}
+              {% endif %}
+              <br>
               <strong>{{ _('Period') }}:</strong>
               {% if widget.period == -1 %}
                 {{ _('All') }}
