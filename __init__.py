@@ -11,7 +11,7 @@ from app.core.lib.object import getHistory
 from app.core.main.BasePlugin import BasePlugin
 from app.core.main.ObjectsStorage import objects_storage
 from app.core.models.Clasess import History, Object
-from app.database import session_scope
+from app.database import session_scope, parse_int_id
 
 from plugins.HistoryView.services import chart_types as chart_types_service
 
@@ -23,7 +23,7 @@ class HistoryView(BasePlugin):
         self.title = "History"
         self.description = """History viewer"""
         self.category = "System"
-        self.version = "2.7"
+        self.version = "2.9"
         self.actions = ["widget", "page", "search"]
 
     def initialization(self):
@@ -1092,10 +1092,11 @@ class HistoryView(BasePlugin):
             return redirect(f"/admin/{self.name}")
 
         if op == "delete":
-            history_id = request.args.get("id", None)
-            with session_scope() as session:
-                session.query(History).filter(History.id == history_id).delete()
-                session.commit()
+            history_id = parse_int_id(request.args.get("id", None))
+            if history_id is not None:
+                with session_scope() as session:
+                    session.query(History).filter(History.id == history_id).delete()
+                    session.commit()
             return redirect(f"{self.name}?object={object_id}&name={name}")
 
         if obj is None:
